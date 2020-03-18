@@ -212,24 +212,18 @@ int mythread_gettid(){
 
 TCB* scheduler()
 {
+  disable_disk_interrupt();
   disable_interrupt();
   if (queue_empty(ready_list)){}
   else{
     TCB *process=dequeue(ready_list);
     enable_interrupt();
+    enable_disk_interrupt();
     return process;
   }
   enable_interrupt();
-/*  int i;
-  for(i=0; i<N; i++)
-  {
-    if (t_state[i].state == INIT)
-    {
-      current = i;
-	    return &t_state[i];
-    }
-  }*/
-  printf("FINISH\n");
+  enable_disk_interrupt();
+  printf("\nFINISH\n");
   exit(1);
 }
 
@@ -244,23 +238,25 @@ void timer_interrupt(int sig){
   int tid = mythread_gettid();
   t_state[tid].state = FREE;
   free(t_state[tid].run_env.uc_stack.ss_sp);
+  printf("*** THREAD %d FINISHED", oldRunning->tid);
   running=scheduler();
   running->state=RUNNING;
-  printf("*** THREAD %d FINISHED: SETCONTEXT OF THREAD %d\n", oldRunning->tid, running->tid);
+  printf(": SETCONTEXT OF THREAD %d\n", running->tid);
   setcontext(&(running->run_env));
   }
   //If slice ends
   else if(running->ticks == 0){
     running->state=INIT;
     running->ticks =QUANTUM_TICKS;
+    disable_disk_interrupt();
     disable_interrupt();
     enqueue(ready_list,running);
     TCB *oldRunning=running;
-    printf("*** THREAD %d: %d ticks remaining\n", oldRunning->tid, oldRunning->remaining_ticks);
     running=scheduler();
     running->state=RUNNING;
     printf("*** SWAPCONTEXT FROM %d TO %d\n",oldRunning->tid, running->tid);
     enable_interrupt();
+    enable_disk_interrupt();
     swapcontext(&(oldRunning->run_env), &(running->run_env));
   }
 }
