@@ -110,7 +110,7 @@ void init_mythreadlib()
 
 
 /* Create and intialize a new thread with body fun_addr and one integer argument */
-int mythread_create (void (*fun_addr)(),int priority,int seconds)
+int mythread_create (void (*fun_addr)(), int priority, int seconds)
 {
   int i;
 
@@ -293,7 +293,7 @@ void timer_interrupt(int sig){
       /*IF the current high-pri thread needs more time to execute than the first thread in the
        high_ready_queue (the one with sortest execution time) then the running thread is enqueued and the ready one is set to run
       */
-      if (running->remaining_ticks > high_ready_list.head->sort){
+      if (running->remaining_ticks > high_ready_list->head->sort){
         running->state = INIT;
         running->ticks = QUANTUM_TICKS;
         disable_interrupt();
@@ -343,8 +343,7 @@ void activator(TCB* next)
   case INIT:
     /* If both threads have the same priority normal message will be displayed*/
     if(old_running->priority == next->priority){
-      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
-      swapcontext (&(old_running->run_env), &(next->run_env));
+      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);      
     }
     /* The only remaining case is that old = LOW & next = HIGH
     Because the case of old = HIGH & next = LOW only will possible when the HIGH-prio thread 
@@ -357,14 +356,17 @@ void activator(TCB* next)
         H                   H           SWAPCONTEXT
     */
     else {
-      printf("*** THREAD %d PREEMPTED: SET CONTEXT OF %d\n",old_running->tid, next->tid);
-      swapcontext (&(old_running->run_env), &(next->run_env));
+      printf("*** THREAD %d PREEMPTED: SET CONTEXT OF %d\n",old_running->tid, next->tid);      
     }
+    //swapcontext returns -1 on error
+    if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
     break;
   
   case FREE:
     printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);    
-    setcontext(&(next->run_env));
+    //setcontext returns -1 on error
+    if(setcontext(&(next->run_env))) perror("Not possible to swap context");
+
     break;
 
   case IDLE:
@@ -375,6 +377,6 @@ void activator(TCB* next)
     //More cases should be implemented for new states
     break;
   }
-
-  printf("mythread_free: After setcontext, should never get here!!...\n");
+  //WTF why
+  //printf("mythread_free: After setcontext, should never get here!!...\n");
 }
