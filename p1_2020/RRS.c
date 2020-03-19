@@ -366,7 +366,7 @@ void activator(TCB* next)
     printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);    
     //setcontext returns -1 on error
     if(setcontext(&(next->run_env))) perror("Not possible to swap context");
-
+    printf("mythread_free: After setcontext, should never get here!!...\n");
     break;
 
   case IDLE:
@@ -376,7 +376,5 @@ void activator(TCB* next)
   default:
     //More cases should be implemented for new states
     break;
-  }
-  //WTF why
-  //printf("mythread_free: After setcontext, should never get here!!...\n");
+  }    
 }
