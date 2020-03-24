@@ -24,11 +24,19 @@ static TCB t_state[N];
 static TCB* running;
 static int current = 0;
 
-/*Queue with the ready threads*/
-static struct  queue *ready_list;
+/* Last run thread*/
+static TCB* old_running;
+
+
+/*Queue with the ready threads. One queue for high priority and other for low priority*/
+static struct queue *high_ready_list;
+static struct queue *low_ready_list;
+
+/* Queue with the waiting threads */
+static struct queue *waiting_list;
 
 /* Variable indicating if the library is initialized (init == 1) or not (init == 0) */
-static int init=0;
+static int init = 0;
 
 /* Thread control block for the idle thread */
 static TCB idle;
@@ -53,7 +61,11 @@ void function_thread(int sec)
 void init_mythreadlib()
 {
   int i;
-   ready_list= queue_new  ();
+  /* Initialize both queues*/
+   high_ready_list= queue_new  ();
+   low_ready_list = queue_new();
+   waiting_list=queue_new();
+
   /* Create context for the idle thread */
   if(getcontext(&idle.run_env) == -1)
   {
@@ -103,7 +115,7 @@ void init_mythreadlib()
 
 
 /* Create and intialize a new thread with body fun_addr and one integer argument */
-int mythread_create (void (*fun_addr)(),int priority,int seconds)
+int mythread_create (void (*fun_addr)(), int priority, int seconds)
 {
   int i;
 
@@ -141,8 +153,13 @@ int mythread_create (void (*fun_addr)(),int priority,int seconds)
   TCB *padentro= &t_state[i];
   disable_interrupt();
   disable_disk_interrupt();
-  //We introduce the newly created thread in the queue
-  enqueue(ready_list,padentro);
+
+  // We introduce the newly created thread in the corresponding queue
+  // High priority: inserted sorted according to the total execution time (SJF)
+  // Low priority: inserted according to arrival order (FIFO)
+  if (t_state[i].priority == HIGH_PRIORITY) sorted_enqueue(high_ready_list,padentro, t_state[i].execution_total_ticks);
+  else enqueue(low_ready_list,padentro);
+
   enable_disk_interrupt();
   enable_interrupt();
 
@@ -154,28 +171,71 @@ int mythread_create (void (*fun_addr)(),int priority,int seconds)
 /* Read disk syscall */
 int read_disk()
 {
-   return 1;
+    //If requested data is not already in the page cache
+    if (data_in_page_cache() != 0) {
+        //We store the calling thread in the waiting list
+        disable_interrupt();
+        disable_disk_interrupt();
+        running->state=WAITING;
+        enqueue(waiting_list, running);
+        old_running = running;
+
+        //Call for the next thread to come
+        running = scheduler();
+        running->state = RUNNING;
+
+        //Swap context
+        activator(running);
+
+        enable_disk_interrupt();
+        enable_interrupt();
+        printf("*** THREAD %d READ FROM DISK\n", running->tid);
+    }
+    return 1;
 }
 
 /* Disk interrupt  */
 void disk_interrupt(int sig)
 {
+    // If the waiting list is not empty
+    if (!queue_empty(waiting_list)) {
+        disable_interrupt();
+        disable_disk_interrupt();
 
+        // Dequeuing the first process in the waiting list
+        TCB *process = dequeue(waiting_list);
+
+        // If the priority of the dequeued process is high-pri enqueue in the high-pri ready list
+        if (process->priority == HIGH_PRIORITY) {
+            enqueue(high_ready_list, process);
+        }
+
+        // If the priority of the dequeued process is low-pri enqueue in the low-pri ready list
+        else {
+            enqueue(low_ready_list, process);
+        }
+
+        enable_disk_interrupt();
+        enable_interrupt();
+        printf("*** THREAD %d READY\n", process->tid);
+    }
 }
 
 
 /* Free terminated thread and exits */
 void mythread_exit() {
-  TCB *oldRunning=running;
-  int tid = oldRunning->tid;
+  old_running = running;
+  int tid = old_running->tid;
   t_state[tid].state = FREE;
   free(t_state[tid].run_env.uc_stack.ss_sp);
-  printf("*** THREAD %d FINISHED", oldRunning->tid);
-  running=scheduler();
+  printf("*** THREAD %d FINISHED", old_running->tid);
+  running = scheduler();
+
   //Scheduler() can finish the execution of the problem, so we might not come here
-  running->state=RUNNING;
-  printf(": SETCONTEXT OF THREAD %d\n", running->tid);
-  setcontext(&(running->run_env));
+  running->state = RUNNING;
+
+  //Swap context to next thread
+  activator(running);
 }
 
 
@@ -216,59 +276,174 @@ int mythread_gettid(){
 
 
 /* SJF para alta prioridad, RR para baja*/
-
 TCB* scheduler()
 {
-
   disable_interrupt();
   disable_disk_interrupt();
-  if (queue_empty(ready_list)){}
-  else{
-    //If queue is not empty, we take the first thread and give it back for further user
-    TCB *process=dequeue(ready_list);
+
+  if (queue_empty(high_ready_list)) {
+    if (queue_empty(low_ready_list)) {
+      if(queue_empty(waiting_list)){
+        //If both queues are empty, we have finish the problem
+        enable_disk_interrupt();
+        enable_interrupt();
+        printf("\nFINISH\n");
+        exit(1);
+      }
+      else{
+        // If there is no thread ready to run but there are threads that has not finished their execution yet, the idle thread should be run
+        return &idle;
+      }
+    }
+
+    //If high-prio queue is empty but low-prio is not, we take the first low-pri thread is returned
+    else {
+      TCB *process = dequeue(low_ready_list);
+      enable_disk_interrupt();
+      enable_interrupt();
+      return process;
+    }
+  }
+
+  //If there are threads in the high-prio queue
+  else {
+    TCB *process = dequeue(high_ready_list);
     enable_disk_interrupt();
     enable_interrupt();
     return process;
   }
-  //If is empty, we have finish the problem
-  enable_disk_interrupt();
-  enable_interrupt();
-  printf("\nFINISH\n");
-  exit(1);
 }
 
 
 /* Timer interrupt */
 void timer_interrupt(int sig){
-  running->ticks -=1;
-  running->remaining_ticks-=1;
+  running->ticks -= 1;
+  running->remaining_ticks -= 1;
+
   //IF thread finishes its number of ticks, we end it
-  if(running->remaining_ticks==0 ){
+  if(running->remaining_ticks == 0 ){
     mythread_exit();
   }
-  //If slice ends
-  else if(running->ticks == 0){
-    running->state=INIT;
-    running->ticks =QUANTUM_TICKS;
+
+  if (!queue_empty(high_ready_list)){//high-prio queue not empty
+
+    if (running->priority == LOW_PRIORITY){
+      //Save the context of the low priority thread and run the high priority one
+      running->state = INIT;
+      running->ticks = QUANTUM_TICKS;
+
+      disable_interrupt();
+      disable_disk_interrupt();
+
+      //We store the thread in our queue
+      enqueue(low_ready_list,running);
+      old_running = running;
+
+      //Call for the next thread to come
+      running = scheduler();
+      running->state = RUNNING;
+
+      enable_disk_interrupt();
+      enable_interrupt();
+
+      //Swap context
+      activator(running);
+    }
+    else if (running->priority == HIGH_PRIORITY){
+      /*IF the current high-pri thread needs more time to execute than the first thread in the
+       high_ready_queue (the one with sortest execution time) then the running thread is enqueued and the ready one is set to run
+      */
+      if (running->remaining_ticks > high_ready_list->head->sort){
+        running->state = INIT;
+        running->ticks = QUANTUM_TICKS;
+        disable_interrupt();
+        disable_disk_interrupt();
+
+        //We store the thread in the high-pri queue, sorted by its remaining execution time
+        sorted_enqueue(high_ready_list, running, running->remaining_ticks);
+        old_running = running;
+
+        //Call for the next thread to come
+        running = scheduler();
+        running->state = RUNNING;
+
+        enable_disk_interrupt();
+        enable_interrupt();
+
+        //Swap context
+        activator(running);
+      }
+
+    }
+  }
+
+  //If high-prio queue is empty
+  //If a low priority thread is running AND its slice ends
+  else if(running->priority == LOW_PRIORITY && running->ticks == 0){
+    //Save the context of the low priority thread and run the high priority one
+    running->state = INIT;
+    running->ticks = QUANTUM_TICKS;
     disable_interrupt();
     disable_disk_interrupt();
+
     //We store the thread in our queue
-    enqueue(ready_list,running);
-    TCB *oldRunning=running;
+    enqueue(low_ready_list,running);
+    old_running = running;
+
     //Call for the next thread to come
-    running=scheduler();
-    running->state=RUNNING;
-    printf("*** SWAPCONTEXT FROM %d TO %d\n",oldRunning->tid, running->tid);
+    running = scheduler();
+    running->state = RUNNING;
+
     enable_disk_interrupt();
     enable_interrupt();
-    //Change the context between the two
-    swapcontext(&(oldRunning->run_env), &(running->run_env));
+
+    //Swap context
+    activator(running);
   }
 }
 
 /* Activator */
 void activator(TCB* next)
 {
-  setcontext (&(next->run_env));
-  printf("mythread_free: After setcontext, should never get here!!...\n");
+  switch (old_running->state)
+  {
+  case INIT:
+    /* If both threads have the same priority normal message will be displayed*/
+    if(old_running->priority == next->priority){
+      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
+    }
+    /* The only remaining case is that old = LOW & next = HIGH
+    Because the case of old = HIGH & next = LOW only will be possible when the HIGH-prio thread
+    has finished, and that is chased with case FREE */
+
+    /*old->priority   next->priority    message
+        L                   L           SWAPCONTEXT
+        L                   H           PREEMPTED
+        H                   L           FINISHED
+        H                   H           SWAPCONTEXT
+    */
+    else {
+      printf("*** THREAD %d PREEMPTED: SET CONTEXT OF %d\n",old_running->tid, next->tid);
+    }
+
+    //swapcontext returns -1 on error
+    if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
+    break;
+
+  case FREE:
+    printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);
+
+    //setcontext returns -1 on error
+    if(setcontext(&(next->run_env))) perror("Not possible to swap context");
+    printf("mythread_free: After setcontext, should never get here!!...\n");
+    break;
+
+  case IDLE:
+    printf("*** THREAD READY: SET CONTEXT TO %d\n", next->tid);
+    break;
+
+  default:
+    //More cases should be implemented for new states
+    break;
+  }
 }

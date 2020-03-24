@@ -236,7 +236,11 @@ TCB* scheduler()
 
   if (queue_empty(high_ready_list)) {
     if (queue_empty(low_ready_list)) {
-      // Both queues are empty
+      //If both queues are empty, we have finish the problem
+      enable_disk_interrupt();
+      enable_interrupt();
+      printf("\nFINISH\n");
+      exit(1);
     }
     else {
       //If high-prio queue is empty but low-prio is not, we take the first low-pri thread is returned
@@ -252,11 +256,6 @@ TCB* scheduler()
     enable_interrupt();
     return process;
   }
-  //If both queues are empty, we have finish the problem
-  enable_disk_interrupt();
-  enable_interrupt();
-  printf("\nFINISH\n");
-  exit(1);
 }
 
 
@@ -270,7 +269,7 @@ void timer_interrupt(int sig){
   }
 
   if (!queue_empty(high_ready_list)){//high-prio queue not empty
-      
+
     if (running->priority == LOW_PRIORITY){
       //Save the context of the low priority thread and run the high priority one
       running->state = INIT;
@@ -283,11 +282,11 @@ void timer_interrupt(int sig){
       //Call for the next thread to come
       running = scheduler();
       running->state = RUNNING;
-      
+
       enable_disk_interrupt();
       enable_interrupt();
       //Swap context
-      activator(running);    
+      activator(running);
     }
     else if (running->priority == HIGH_PRIORITY){
       /*IF the current high-pri thread needs more time to execute than the first thread in the
@@ -304,11 +303,11 @@ void timer_interrupt(int sig){
         //Call for the next thread to come
         running = scheduler();
         running->state = RUNNING;
-      
+
         enable_disk_interrupt();
         enable_interrupt();
         //Swap context
-        activator(running);    
+        activator(running);
       }
 
     }
@@ -327,11 +326,11 @@ void timer_interrupt(int sig){
     //Call for the next thread to come
     running = scheduler();
     running->state = RUNNING;
-    
+
     enable_disk_interrupt();
     enable_interrupt();
     //Swap context
-    activator(running);    
+    activator(running);
   }
 }
 
@@ -343,10 +342,10 @@ void activator(TCB* next)
   case INIT:
     /* If both threads have the same priority normal message will be displayed*/
     if(old_running->priority == next->priority){
-      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);      
+      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
     }
     /* The only remaining case is that old = LOW & next = HIGH
-    Because the case of old = HIGH & next = LOW only will possible when the HIGH-prio thread 
+    Because the case of old = HIGH & next = LOW only will possible when the HIGH-prio thread
     has finished, and that is chased with case FREE */
 
     /*old->priority   next->priority    message
@@ -356,14 +355,14 @@ void activator(TCB* next)
         H                   H           SWAPCONTEXT
     */
     else {
-      printf("*** THREAD %d PREEMPTED: SET CONTEXT OF %d\n",old_running->tid, next->tid);      
+      printf("*** THREAD %d PREEMPTED: SET CONTEXT OF %d\n",old_running->tid, next->tid);
     }
     //swapcontext returns -1 on error
     if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
     break;
-  
+
   case FREE:
-    printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);    
+    printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);
     //setcontext returns -1 on error
     if(setcontext(&(next->run_env))) perror("Not possible to swap context");
     printf("mythread_free: After setcontext, should never get here!!...\n");
@@ -376,5 +375,5 @@ void activator(TCB* next)
   default:
     //More cases should be implemented for new states
     break;
-  }    
+  }
 }
