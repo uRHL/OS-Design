@@ -33,7 +33,7 @@ static struct  queue *high_ready_list;
 static struct queue *low_ready_list;
 
 /* Variable indicating if the library is initialized (init == 1) or not (init == 0) */
-static int init=0;
+static int init = 0;
 
 /* Thread control block for the idle thread */
 static TCB idle;
@@ -58,9 +58,11 @@ void function_thread(int sec)
 void init_mythreadlib()
 {
   int i;
+
   /* Initialize both queues*/
    high_ready_list= queue_new  ();
    low_ready_list = queue_new();
+
   /* Create context for the idle thread */
   if(getcontext(&idle.run_env) == -1)
   {
@@ -95,7 +97,7 @@ void init_mythreadlib()
     exit(5);
   }
 
-  for(i=1; i<N; i++)
+  for(i = 1; i < N; i++)
   {
     t_state[i].state = FREE;
   }
@@ -114,9 +116,9 @@ int mythread_create (void (*fun_addr)(), int priority, int seconds)
 {
   int i;
 
-  if (!init) { init_mythreadlib(); init=1;}
+  if (!init) { init_mythreadlib(); init = 1;}
 
-  for (i=0; i<N; i++)
+  for (i = 0; i < N; i++)
     if (t_state[i].state == FREE) break;
 
   if (i == N) return(-1);
@@ -145,7 +147,7 @@ int mythread_create (void (*fun_addr)(), int priority, int seconds)
   t_state[i].run_env.uc_stack.ss_size = STACKSIZE;
   t_state[i].run_env.uc_stack.ss_flags = 0;
   makecontext(&t_state[i].run_env, fun_addr,2,seconds);
-  TCB *padentro= &t_state[i];
+  TCB *padentro = &t_state[i];
   disable_interrupt();
   disable_disk_interrupt();
 
@@ -183,8 +185,10 @@ void mythread_exit() {
   t_state[tid].state = FREE;
   free(t_state[tid].run_env.uc_stack.ss_sp);
   running = scheduler();
+
   //Scheduler() can finish the execution of the problem, so we might not come here
   running->state = RUNNING;
+
   //Swap context to next thread
   activator(running);
 }
@@ -221,13 +225,12 @@ int mythread_getpriority(int priority)
 
 /* Get the current thread id.  */
 int mythread_gettid(){
-  if (!init) { init_mythreadlib(); init=1;}
+  if (!init) { init_mythreadlib(); init = 1;}
   return current;
 }
 
 
-/* SJF para alta prioridad, RR para baja*/
-
+/* SJF para alta prioridad, RR para baja */
 TCB* scheduler()
 {
 
@@ -239,18 +242,22 @@ TCB* scheduler()
       //If both queues are empty, we have finish the problem
       enable_disk_interrupt();
       enable_interrupt();
+      printf("*** THREAD %d FINISHED\n", old_running->tid);
       printf("\nFINISH\n");
       exit(1);
     }
+
+    //If high-prio queue is empty but low-prio is not, we take the first low-pri thread is returned
     else {
-      //If high-prio queue is empty but low-prio is not, we take the first low-pri thread is returned
       TCB *process = dequeue(low_ready_list);
       enable_disk_interrupt();
       enable_interrupt();
       return process;
     }
   }
-  else{ //If there are threads in the high-prio queue
+
+  //If there are threads in the high-prio queue
+  else {
     TCB *process = dequeue(high_ready_list);
     enable_disk_interrupt();
     enable_interrupt();
@@ -263,28 +270,31 @@ TCB* scheduler()
 void timer_interrupt(int sig){
   running->ticks -= 1;
   running->remaining_ticks -= 1;
+
   //IF thread finishes its number of ticks, we end it
   if(running->remaining_ticks == 0 ){
     mythread_exit();
   }
 
   if (!queue_empty(high_ready_list)){//high-prio queue not empty
-
     if (running->priority == LOW_PRIORITY){
       //Save the context of the low priority thread and run the high priority one
       running->state = INIT;
       running->ticks = QUANTUM_TICKS;
       disable_interrupt();
       disable_disk_interrupt();
+
       //We store the thread in our queue
       enqueue(low_ready_list,running);
       old_running = running;
+
       //Call for the next thread to come
       running = scheduler();
       running->state = RUNNING;
 
       enable_disk_interrupt();
       enable_interrupt();
+
       //Swap context
       activator(running);
     }
@@ -297,15 +307,18 @@ void timer_interrupt(int sig){
         running->ticks = QUANTUM_TICKS;
         disable_interrupt();
         disable_disk_interrupt();
+
         //We store the thread in the high-pri queue, sorted by its remaining execution time
         sorted_enqueue(high_ready_list, running, running->remaining_ticks);
         old_running = running;
+
         //Call for the next thread to come
         running = scheduler();
         running->state = RUNNING;
 
         enable_disk_interrupt();
         enable_interrupt();
+
         //Swap context
         activator(running);
       }
@@ -320,15 +333,18 @@ void timer_interrupt(int sig){
     running->ticks = QUANTUM_TICKS;
     disable_interrupt();
     disable_disk_interrupt();
+
     //We store the thread in our queue
     enqueue(low_ready_list,running);
     old_running = running;
+
     //Call for the next thread to come
     running = scheduler();
     running->state = RUNNING;
 
     enable_disk_interrupt();
     enable_interrupt();
+
     //Swap context
     activator(running);
   }
@@ -357,6 +373,7 @@ void activator(TCB* next)
     else {
       printf("*** THREAD %d PREEMPTED: SET CONTEXT OF %d\n",old_running->tid, next->tid);
     }
+
     //swapcontext returns -1 on error
     if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
     break;
@@ -373,7 +390,6 @@ void activator(TCB* next)
     break;
 
   default:
-    //More cases should be implemented for new states
     break;
   }
 }

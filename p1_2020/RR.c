@@ -28,7 +28,7 @@ static int current = 0;
 static struct  queue *ready_list;
 
 /* Variable indicating if the library is initialized (init == 1) or not (init == 0) */
-static int init=0;
+static int init = 0;
 
 /* Thread control block for the idle thread */
 static TCB idle;
@@ -53,7 +53,8 @@ void function_thread(int sec)
 void init_mythreadlib()
 {
   int i;
-   ready_list= queue_new  ();
+   ready_list = queue_new  ();
+
   /* Create context for the idle thread */
   if(getcontext(&idle.run_env) == -1)
   {
@@ -107,9 +108,9 @@ int mythread_create (void (*fun_addr)(),int priority,int seconds)
 {
   int i;
 
-  if (!init) { init_mythreadlib(); init=1;}
+  if (!init) { init_mythreadlib(); init = 1;}
 
-  for (i=0; i<N; i++)
+  for (i = 0; i < N; i++)
     if (t_state[i].state == FREE) break;
 
   if (i == N) return(-1);
@@ -138,9 +139,10 @@ int mythread_create (void (*fun_addr)(),int priority,int seconds)
   t_state[i].run_env.uc_stack.ss_size = STACKSIZE;
   t_state[i].run_env.uc_stack.ss_flags = 0;
   makecontext(&t_state[i].run_env, fun_addr,2,seconds);
-  TCB *padentro= &t_state[i];
+  TCB *padentro = &t_state[i];
   disable_interrupt();
   disable_disk_interrupt();
+
   //We introduce the newly created thread in the queue
   enqueue(ready_list,padentro);
   enable_disk_interrupt();
@@ -166,21 +168,21 @@ void disk_interrupt(int sig)
 
 /* Free terminated thread and exits */
 void mythread_exit() {
-  TCB *oldRunning=running;
+  TCB *oldRunning = running;
   int tid = oldRunning->tid;
   t_state[tid].state = FREE;
   free(t_state[tid].run_env.uc_stack.ss_sp);
   printf("*** THREAD %d FINISHED", oldRunning->tid);
-  running=scheduler();
+  running = scheduler();
+
   //Scheduler() can finish the execution of the problem, so we might not come here
-  running->state=RUNNING;
+  running->state = RUNNING;
   printf(": SETCONTEXT OF THREAD %d\n", running->tid);
   setcontext(&(running->run_env));
 }
 
 
 void mythread_timeout(int tid) {
-
     printf("*** THREAD %d EJECTED\n", tid);
     t_state[tid].state = FREE;
     free(t_state[tid].run_env.uc_stack.ss_sp);
@@ -210,7 +212,7 @@ int mythread_getpriority(int priority)
 
 /* Get the current thread id.  */
 int mythread_gettid(){
-  if (!init) { init_mythreadlib(); init=1;}
+  if (!init) { init_mythreadlib(); init = 1;}
   return current;
 }
 
@@ -219,17 +221,18 @@ int mythread_gettid(){
 
 TCB* scheduler()
 {
-
   disable_interrupt();
   disable_disk_interrupt();
   if (queue_empty(ready_list)){}
-  else{
-    //If queue is not empty, we take the first thread and give it back for further user
-    TCB *process=dequeue(ready_list);
+
+  //If queue is not empty, we take the first thread and give it back for further user
+  else {
+    TCB *process = dequeue(ready_list);
     enable_disk_interrupt();
     enable_interrupt();
     return process;
   }
+
   //If is empty, we have finish the problem
   enable_disk_interrupt();
   enable_interrupt();
@@ -240,27 +243,32 @@ TCB* scheduler()
 
 /* Timer interrupt */
 void timer_interrupt(int sig){
-  running->ticks -=1;
-  running->remaining_ticks-=1;
+  running->ticks -= 1;
+  running->remaining_ticks -= 1;
+
   //IF thread finishes its number of ticks, we end it
   if(running->remaining_ticks==0 ){
     mythread_exit();
   }
+
   //If slice ends
   else if(running->ticks == 0){
-    running->state=INIT;
-    running->ticks =QUANTUM_TICKS;
+    running->state = INIT;
+    running->ticks = QUANTUM_TICKS;
     disable_interrupt();
     disable_disk_interrupt();
+    
     //We store the thread in our queue
     enqueue(ready_list,running);
-    TCB *oldRunning=running;
+    TCB *oldRunning = running;
+
     //Call for the next thread to come
-    running=scheduler();
+    running = scheduler();
     running->state=RUNNING;
     printf("*** SWAPCONTEXT FROM %d TO %d\n",oldRunning->tid, running->tid);
     enable_disk_interrupt();
     enable_interrupt();
+
     //Change the context between the two
     swapcontext(&(oldRunning->run_env), &(running->run_env));
   }

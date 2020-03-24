@@ -15,7 +15,7 @@ extern void function_thread(int sec);
 
 int main(int argc, char *argv[])
 {
-  int j,k,l,m,a,b,f;
+  int j, k, l, m, a, b, f;
 
 
   mythread_setpriority(LOW_PRIORITY);
@@ -47,8 +47,8 @@ int main(int argc, char *argv[])
   read_disk();
       
      
-  for (a=0; a<10; ++a) {
-    for (b=0; b<30000000; ++b);
+  for (a = 0; a < 10; ++a) {
+    for (b = 0; b < 30000000; ++b);
   }	
 
   mythread_exit();	
