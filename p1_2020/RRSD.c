@@ -46,9 +46,7 @@ static void idle_function()
 void function_thread(int sec)
 {
     //time_t end = time(NULL) + sec;
-    while(running->remaining_ticks)
-    {
-    }
+    while(running->remaining_ticks>0){}
     mythread_exit();
 }
 
@@ -156,7 +154,6 @@ int mythread_create (void (*fun_addr)(), int priority, int seconds)
   // Low priority: inserted according to arrival order (FIFO)
   if (t_state[i].priority == HIGH_PRIORITY) sorted_enqueue(high_ready_list,padentro, t_state[i].execution_total_ticks);
   else enqueue(low_ready_list,padentro);
-
   enable_disk_interrupt();
   enable_interrupt();
   printf("*** Thread %d created\n",padentro->tid);
@@ -174,15 +171,14 @@ int read_disk()
     disable_interrupt();
     disable_disk_interrupt();
     enqueue(waiting_list,running);
+    enable_disk_interrupt();
+    enable_interrupt();
     old_running=running;
     running=scheduler();
     running->state=RUNNING;
     printf("***  THREAD  %d READ  FROM  DISK\n",old_running->tid);
-    printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, running->tid);
-    enable_disk_interrupt();
-    enable_interrupt();
     current=running->tid;
-    setcontext(&(running->run_env));
+    activator(running);
 }
    return 1;
 }
@@ -267,39 +263,38 @@ int mythread_gettid(){
 /* SJF para alta prioridad, RR para baja */
 TCB* scheduler()
 {
-
-  disable_interrupt();
-  disable_disk_interrupt();
   TCB* proc;
   if(!queue_empty(high_ready_list)){
+    disable_interrupt();
+    disable_disk_interrupt();
     proc=dequeue(high_ready_list);
+    enable_disk_interrupt();
+    enable_interrupt();
   }
   else{
     if(!queue_empty(low_ready_list)){
+      disable_interrupt();
+      disable_disk_interrupt();
       proc=dequeue(low_ready_list);
+      enable_disk_interrupt();
+      enable_interrupt();
     }
     else{
       if(!queue_empty(waiting_list)){
         proc=&idle;
       }
       else{
-        enable_disk_interrupt();
-        enable_interrupt();
         printf("\nFINISH\n");
         exit(1);
       }
     }
   }
-  enable_disk_interrupt();
-  enable_interrupt();
   return proc;
 }
 
 
 /* Timer interrupt */
 void timer_interrupt(int sig){
-  disable_interrupt();
-  disable_disk_interrupt();
   running->ticks -= 1;
   running->remaining_ticks -= 1;
   //IF thread finishes its number of ticks, we end it
@@ -309,12 +304,11 @@ void timer_interrupt(int sig){
   if(running->tid==-1){
     old_running=running;
     running = scheduler();
-    running->state = RUNNING;
-
-    enable_disk_interrupt();
-    enable_interrupt();
-    current=running->tid;
-    activator(running);
+    if(running->tid!=-1){
+      running->state = RUNNING;
+      current=running->tid;
+      activator(running);
+    }
   }
   else if (!queue_empty(high_ready_list)){//high-prio queue not empty
     if (running->priority == LOW_PRIORITY){
@@ -323,15 +317,16 @@ void timer_interrupt(int sig){
       running->ticks = QUANTUM_TICKS;
 
       //We store the thread in our queue
+      disable_interrupt();
+      disable_disk_interrupt();
       enqueue(low_ready_list,running);
+      enable_disk_interrupt();
+      enable_interrupt();
       old_running = running;
 
       //Call for the next thread to come
       running = scheduler();
       running->state = RUNNING;
-
-      enable_disk_interrupt();
-      enable_interrupt();
 
       //Swap context
 
@@ -347,17 +342,15 @@ void timer_interrupt(int sig){
         running->ticks = QUANTUM_TICKS;
         disable_interrupt();
         disable_disk_interrupt();
-
         //We store the thread in the high-pri queue, sorted by its remaining execution time
         sorted_enqueue(high_ready_list, running, running->remaining_ticks);
+        enable_disk_interrupt();
+        enable_interrupt();
         old_running = running;
 
         //Call for the next thread to come
         running = scheduler();
         running->state = RUNNING;
-
-        enable_disk_interrupt();
-        enable_interrupt();
 
         //Swap context
         current=running->tid;
@@ -374,17 +367,15 @@ void timer_interrupt(int sig){
     running->ticks = QUANTUM_TICKS;
     disable_interrupt();
     disable_disk_interrupt();
-
     //We store the thread in our queue
     enqueue(low_ready_list,running);
+    enable_disk_interrupt();
+    enable_interrupt();
     old_running = running;
 
     //Call for the next thread to come
     running = scheduler();
     running->state = RUNNING;
-
-    enable_disk_interrupt();
-    enable_interrupt();
 
     //Swap context
     activator(running);
@@ -418,6 +409,11 @@ void activator(TCB* next)
     //swapcontext returns -1 on error
     if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
     break;
+
+  case WAITING:
+      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
+      if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
+      break;
 
   case FREE:
     printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);
