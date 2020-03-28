@@ -111,6 +111,15 @@ int mythread_create (void (*fun_addr)(),int priority,int seconds)
 
   if (!init) { init_mythreadlib(); init = 1;}
 
+  if (priority == SYSTEM) {
+    // Return errno -2 when a user tries to create a SYSTEM thread
+    return -2;
+
+  } else if (priority != HIGH_PRIORITY && priority != LOW_PRIORITY) {
+    // Return errno -3 when a user tries to create a thread with a not defined priority
+    return -3;
+  }
+
   for (i = 0; i < N; i++)
     if (t_state[i].state == FREE) break;
 
@@ -194,10 +203,16 @@ void mythread_timeout(int tid) {
 /* Sets the priority of the calling thread */
 void mythread_setpriority(int priority)
 {
-  int tid = mythread_gettid();
-  t_state[tid].priority = priority;
-  if(priority ==  HIGH_PRIORITY){
-    t_state[tid].remaining_ticks = 195;
+  //Priority can only be set to HIGH or LOW, not SYSTEM or any non defined priority
+  if (priority == LOW_PRIORITY || priority == HIGH_PRIORITY){
+    int tid = mythread_gettid();
+    t_state[tid].priority = priority;
+
+    if(priority ==  HIGH_PRIORITY){
+      t_state[tid].remaining_ticks = 195;
+    }
+  }else {
+      printf("Invalid priority < %d >", priority);
   }
 }
 

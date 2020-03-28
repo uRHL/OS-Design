@@ -15,7 +15,7 @@
 #define STARVATION 200
 
 // Define this macro for predictable and consistent behavior between executions
-#define DISK_INTERRUPT_SEED 0xff00ff00
+//#define DISK_INTERRUPT_SEED 0xff00ff00
 
 void timer_interrupt ();
 void init_interrupt();
