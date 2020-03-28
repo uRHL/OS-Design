@@ -176,7 +176,7 @@ int read_disk()
     old_running=running;
     running=scheduler();
     running->state=RUNNING;
-    printf("***  THREAD  %d READ  FROM  DISK\n",old_running->tid);
+    printf("*** THREAD %d READ  FROM  DISK\n",old_running->tid);
     current=running->tid;
     activator(running);
 }
@@ -197,7 +197,7 @@ void disk_interrupt(int sig)
    else{
      enqueue(low_ready_list,proc);
    }
-   printf("***  THREAD  %d READY\n",proc->tid);
+   printf("*** THREAD %d READY\n",proc->tid);
    enable_disk_interrupt();
    enable_interrupt();
  }
@@ -284,6 +284,7 @@ TCB* scheduler()
         proc=&idle;
       }
       else{
+        printf("*** THREAD %d FINISHED\n", old_running->tid);
         printf("\nFINISH\n");
         exit(1);
       }
@@ -303,6 +304,7 @@ void timer_interrupt(int sig){
   }
   if(running->tid==-1){
     old_running=running;
+    old_running->state= IDLE;
     running = scheduler();
     if(running->tid!=-1){
       running->state = RUNNING;

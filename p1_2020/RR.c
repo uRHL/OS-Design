@@ -23,6 +23,7 @@ static TCB t_state[N];
 /* Current running thread */
 static TCB* running;
 static int current = 0;
+static TCB* old_running;
 
 /*Queue with the ready threads*/
 static struct  queue *ready_list;
@@ -168,17 +169,15 @@ void disk_interrupt(int sig)
 
 /* Free terminated thread and exits */
 void mythread_exit() {
-  TCB *oldRunning = running;
-  int tid = oldRunning->tid;
+  old_running = running;
+  int tid = old_running->tid;
   t_state[tid].state = FREE;
   free(t_state[tid].run_env.uc_stack.ss_sp);
-  printf("*** THREAD %d FINISHED", oldRunning->tid);
   running = scheduler();
-
   //Scheduler() can finish the execution of the problem, so we might not come here
   running->state = RUNNING;
-  printf(": SETCONTEXT OF THREAD %d\n", running->tid);
-  setcontext(&(running->run_env));
+  //Swap context to next thread
+  activator(running);
 }
 
 
@@ -197,7 +196,7 @@ void mythread_setpriority(int priority)
 {
   int tid = mythread_gettid();
   t_state[tid].priority = priority;
-  if(priority ==  HIGH_PRIORITY){    
+  if(priority ==  HIGH_PRIORITY){
     t_state[tid].remaining_ticks = 195;
   }
 }
@@ -221,21 +220,15 @@ int mythread_gettid(){
 
 TCB* scheduler()
 {
-  disable_interrupt();
-  disable_disk_interrupt();
-  if (queue_empty(ready_list)){}
-
-  //If queue is not empty, we take the first thread and give it back for further user
-  else {
+  if (!queue_empty(ready_list)){
+    disable_interrupt();
+    disable_disk_interrupt();
     TCB *process = dequeue(ready_list);
     enable_disk_interrupt();
     enable_interrupt();
     return process;
   }
-
   //If is empty, we have finish the problem
-  enable_disk_interrupt();
-  enable_interrupt();
   printf("\nFINISH\n");
   exit(1);
 }
@@ -252,31 +245,47 @@ void timer_interrupt(int sig){
   }
 
   //If slice ends
-  else if(running->ticks == 0){
+  else if(running->ticks == 0 && !queue_empty(ready_list)){
     running->state = INIT;
     running->ticks = QUANTUM_TICKS;
     disable_interrupt();
     disable_disk_interrupt();
-    
     //We store the thread in our queue
     enqueue(ready_list,running);
-    TCB *oldRunning = running;
-
+    enable_disk_interrupt();
+    enable_interrupt();
+    old_running = running;
     //Call for the next thread to come
     running = scheduler();
     running->state=RUNNING;
-    printf("*** SWAPCONTEXT FROM %d TO %d\n",oldRunning->tid, running->tid);
-    enable_disk_interrupt();
-    enable_interrupt();
-
-    //Change the context between the two
-    swapcontext(&(oldRunning->run_env), &(running->run_env));
+    activator(running);
+  }
+  else if(running->ticks == 0 && queue_empty(ready_list)) {
+    running->ticks = QUANTUM_TICKS;
   }
 }
 
 /* Activator */
 void activator(TCB* next)
 {
-  setcontext (&(next->run_env));
-  printf("mythread_free: After setcontext, should never get here!!...\n");
+  switch (old_running->state)
+  {
+  case INIT:
+    /* If both threads have the same priority normal message will be displayed*/
+    printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
+    //swapcontext returns -1 on error
+    if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
+    break;
+
+  case FREE:
+    printf("*** THREAD %d FINISHED: SET CONTEXT OF %d\n", old_running->tid, next->tid);
+    //setcontext returns -1 on error
+    if(setcontext(&(next->run_env))) perror("Not possible to swap context");
+    printf("mythread_free: After setcontext, should never get here!!...\n");
+    break;
+
+
+  default:
+    break;
+  }
 }
