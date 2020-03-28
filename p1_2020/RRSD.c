@@ -115,7 +115,6 @@ int mythread_create (void (*fun_addr)(), int priority, int seconds)
   int i;
 
   if (!init) { init_mythreadlib(); init = 1;}
-
   if (priority == SYSTEM) {
     // Return errno -2 when a user tries to create a SYSTEM thread
     return -2;
@@ -165,8 +164,6 @@ int mythread_create (void (*fun_addr)(), int priority, int seconds)
   else enqueue(low_ready_list,padentro);
   enable_disk_interrupt();
   enable_interrupt();
-  printf("*** Thread %d created\n",padentro->tid);
-
   return i;
 }
 /****** End my_thread_create() ******/
@@ -176,19 +173,17 @@ int mythread_create (void (*fun_addr)(), int priority, int seconds)
 int read_disk()
 {
   if (data_in_page_cache()!=0){
-    running->state = WAITING;
+    running->state=WAITING;
     disable_interrupt();
     disable_disk_interrupt();
-
     enqueue(waiting_list,running);
-
     enable_disk_interrupt();
     enable_interrupt();
-    old_running = running;
-    running = scheduler();
-    running->state = RUNNING;
+    old_running=running;
+    running=scheduler();
+    running->state=RUNNING;
     printf("*** THREAD %d READ  FROM  DISK\n",old_running->tid);
-    current = running->tid;
+    current=running->tid;
     activator(running);
 }
    return 1;
@@ -201,8 +196,8 @@ void disk_interrupt(int sig)
    disable_interrupt();
    disable_disk_interrupt();
    TCB* proc =dequeue(waiting_list);
-   proc->state = INIT;
-   if(proc->priority == HIGH_PRIORITY){
+   proc->state=INIT;
+   if(proc->priority==HIGH_PRIORITY){
      sorted_enqueue(high_ready_list, proc, proc->remaining_ticks);
    }
    else{
@@ -228,7 +223,7 @@ void mythread_exit() {
 
   //Swap context to next thread
 
-  current = running->tid;
+  current=running->tid;
   activator(running);
 }
 
@@ -249,18 +244,11 @@ void mythread_timeout(int tid) {
 /* Sets the priority of the calling thread */
 void mythread_setpriority(int priority)
 {
-  //Priority can only be set to HIGH or LOW, not SYSTEM or any non defined priority
-  if (priority == LOW_PRIORITY || priority == HIGH_PRIORITY){
-    int tid = mythread_gettid();
-    t_state[tid].priority = priority;
-
-    if(priority ==  HIGH_PRIORITY){
-      t_state[tid].remaining_ticks = 195;
-    }
-  }else {
-      printf("Invalid priority < %d >", priority);
+  int tid = mythread_gettid();
+  t_state[tid].priority = priority;
+  if(priority ==  HIGH_PRIORITY){
+    t_state[tid].remaining_ticks = 195;
   }
-  
 }
 
 /* Returns the priority of the calling thread */
