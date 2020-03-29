@@ -419,7 +419,7 @@ void activator(TCB* next)
     break;
 
   case WAITING:
-      printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
+      //printf("*** SWAPCONTEXT FROM %d TO %d\n", old_running->tid, next->tid);
       if(swapcontext (&(old_running->run_env), &(next->run_env))) perror("Not possible to swap context");
       break;
 
