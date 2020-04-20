@@ -21,7 +21,30 @@
  */
 int mkFS(long deviceSize)
 {
-	return -1;
+	if(deviceSize<460000 || deviceSize>600000){
+		printf("Disk size should be between 460Kb and 600Kb\n");
+		return -1;
+	}
+	 // setup with default values the superblock, maps, and i-nodes
+	    sBlocks[0].magicNumber = 12345;    
+	    sBlocks[0].numBlocksInodeMap = 48;
+	    sBlocks[0].numBlocksBlockMap = 48;
+	    sBlocks[0].numInodes = 48;
+	    sBlocks[0].firstInode = 0;
+	    sBlocks[0].numDataBlocks = 48;
+	    sBlocks[0].deviceSize = deviceSize;
+
+	    for (int i=0; i<sBlocks[0].numInodes; i++){           
+	    	imap[i] = 0; // free
+	    	}
+	    for (int i =0; i<sBlocks[0].numDataBlocks; i++){
+	    	bmap[i] = 0; // free 
+	    }
+	    for (int i=0; i<sBlocks[0].numInodes; i++){
+	    	memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
+
+	    }          
+	return 0;
 }
 
 /*
@@ -30,7 +53,21 @@ int mkFS(long deviceSize)
  */
 int mountFS(void)
 {
-	return -1;
+	// To write block 0 from sBlocks[0] into disk    
+	bwrite(DEVICE_IMAGE, 0, &(sBlocks[0]) );     
+	// To write the i-node map to disk    
+	for (int i=0; i<sBlocks[0].numBlocksInodeMap; i++){
+		bwrite(DEVICE_IMAGE, 1+i, ((char *)imap + i*BLOCK_SIZE)) ;    
+		}            
+	// To write the block map to disk    
+	for (int i =0; i<sBlocks[0].numBlocksBlockMap; i++){
+		bwrite(DEVICE_IMAGE, 1+i+sBlocks[0].numBlocksInodeMap, ((char *)bmap + i*BLOCK_SIZE));
+	}           
+	// To write the i-nodes to disk
+	for (int i=0; i<(sBlocks[0].numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
+		bwrite(DEVICE_IMAGE, i+sBlocks[0].firstInode, ((char *)inodos + i*BLOCK_SIZE));
+	} 
+    return 1;
 }
 
 /*
