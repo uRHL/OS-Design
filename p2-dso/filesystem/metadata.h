@@ -31,7 +31,7 @@ typedef struct {
   unsigned int firstDataBlock;             /* Block number of the first block*/    
   unsigned int deviceSize;                 /* Total device size in bytes*/
 
-  char imap[numInodes];
+  char imap[MAX_iNODE_NUM];
   char bmap[251];
   //numDataBlocks = totalBlocks - superblock - iNode blocks = (disk_size / block_size) - 1 - 48
   //Max disk size = 600 KB --> max number of data blocks = 300 - 1 - 48 = 251

@@ -16,7 +16,7 @@
 #include "filesystem/metadata.h"   // Type and structure declaration of the file system
 #include <string.h> //memset function
 
-SuperblockType sBlock;
+//SuperblockType sBlock;
 
 /*
  * @brief 	Generates the proper file system structure in a storage device, as designed by the student.
@@ -69,15 +69,19 @@ int mkFS(long deviceSize)
 int mountFS(void)
 {
 	// To write block 0 from sBlock into disk    
-	bwrite(DEVICE_IMAGE, 0, &(sBlock) );     
+	bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock) );
+
+	/* Not needed. Imap and bmap are now contained in the supeerblock 
+	    
 	// To write the i-node map to disk    
 	for (int i=0; i<sBlock.numBlocksInodeMap; i++){
-		bwrite(DEVICE_IMAGE, 1+i, ((char *)imap + i*BLOCK_SIZE)) ;    
+		bwrite(DEVICE_IMAGE, 1+i, ((char *)sBlock.imap + i*BLOCK_SIZE)) ;    
 		}            
 	// To write the block map to disk    
 	for (int i =0; i<sBlock.numBlocksBlockMap; i++){
-		bwrite(DEVICE_IMAGE, 1+i+sBlock.numBlocksInodeMap, ((char *)bmap + i*BLOCK_SIZE));
-	}           
+		bwrite(DEVICE_IMAGE, 1+i+sBlock.numBlocksInodeMap, ((char *)sBlock.bmap + i*BLOCK_SIZE));
+	} 
+	*/          
 	// To write the i-nodes to disk
 	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
 		bwrite(DEVICE_IMAGE, i+sBlock.firstInode, ((char *)inodos + i*BLOCK_SIZE));
