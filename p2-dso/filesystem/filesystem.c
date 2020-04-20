@@ -21,28 +21,40 @@
  */
 int mkFS(long deviceSize)
 {
-	if(deviceSize<460000 || deviceSize>600000){
-		printf("Disk size should be between 460Kb and 600Kb\n");
+	if(deviceSize < MIN_DISK_SIZE || deviceSize > MAX_DISK_SIZE){
+		printf("Disk size should be between 460KB and 600KB\n");
 		return -1;
 	}
-	 // setup with default values the superblock, maps, and i-nodes
-	    sBlocks[0].magicNumber = 12345;    
-	    sBlocks[0].numBlocksInodeMap = 48;
-	    sBlocks[0].numBlocksBlockMap = 48;
-	    sBlocks[0].numInodes = 48;
-	    sBlocks[0].firstInode = 0;
-	    sBlocks[0].numDataBlocks = 48;
-	    sBlocks[0].deviceSize = deviceSize;
+	 // setup with default values the superblock, maps, and i-nodes	 
+	    sBlock.magicNumber = 0x000D5500;   
+		sBlock.numInodes = MAX_iNODE_NUM;
 
-	    for (int i=0; i<sBlocks[0].numInodes; i++){           
-	    	imap[i] = 0; // free
+		//Not needed. See metadata.h
+	    //sBlock.numBlocksInodeMap = ; //Cuantos bloques necesito para mapear todos los nodos (todos los punteros)
+	    //sBlock.numBlocksBlockMap = 48; //Cuantos bloques necesito para mapear todos los data blocks (todos los punteros)
+
+	    sBlock.firstInode = 0; //Superblock
+		
+		//49 = num Inode blocks + num superblock
+	    sBlock.numDataBlocks = (deviceSize / BLOCK_SIZE) - (49);
+	    sBlock.deviceSize = deviceSize;
+
+
+	    for (int i=0; i<sBlock.numInodes; i++){           
+	    	sBlock.imap[i] = 0; // free
 	    	}
-	    for (int i =0; i<sBlocks[0].numDataBlocks; i++){
-	    	bmap[i] = 0; // free 
+		/*Since bmap contains positions for the maximum possible number of datablocks, 
+		some of them may actually refer to an unexistent block. 
+		Those positions, (when i is greater than numDataBlocks) should be marked as invalid*/
+	    for (int i =0; i<MAX_NUM_DATABLOCKS; i++){
+			if( i>= sBlock.numDataBlocks){
+				sBlock.bmap[i] = -1; // invalid 
+			}else{
+				sBlock.bmap[i] = 0; // free 
+			}	    	
 	    }
-	    for (int i=0; i<sBlocks[0].numInodes; i++){
+	    for (int i=0; i<sBlock.numInodes; i++){
 	    	memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
-
 	    }          
 	return 0;
 }
@@ -53,19 +65,19 @@ int mkFS(long deviceSize)
  */
 int mountFS(void)
 {
-	// To write block 0 from sBlocks[0] into disk    
-	bwrite(DEVICE_IMAGE, 0, &(sBlocks[0]) );     
+	// To write block 0 from sBlock into disk    
+	bwrite(DEVICE_IMAGE, 0, &(sBlock) );     
 	// To write the i-node map to disk    
-	for (int i=0; i<sBlocks[0].numBlocksInodeMap; i++){
+	for (int i=0; i<sBlock.numBlocksInodeMap; i++){
 		bwrite(DEVICE_IMAGE, 1+i, ((char *)imap + i*BLOCK_SIZE)) ;    
 		}            
 	// To write the block map to disk    
-	for (int i =0; i<sBlocks[0].numBlocksBlockMap; i++){
-		bwrite(DEVICE_IMAGE, 1+i+sBlocks[0].numBlocksInodeMap, ((char *)bmap + i*BLOCK_SIZE));
+	for (int i =0; i<sBlock.numBlocksBlockMap; i++){
+		bwrite(DEVICE_IMAGE, 1+i+sBlock.numBlocksInodeMap, ((char *)bmap + i*BLOCK_SIZE));
 	}           
 	// To write the i-nodes to disk
-	for (int i=0; i<(sBlocks[0].numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
-		bwrite(DEVICE_IMAGE, i+sBlocks[0].firstInode, ((char *)inodos + i*BLOCK_SIZE));
+	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
+		bwrite(DEVICE_IMAGE, i+sBlock.firstInode, ((char *)inodos + i*BLOCK_SIZE));
 	} 
     return 1;
 }
