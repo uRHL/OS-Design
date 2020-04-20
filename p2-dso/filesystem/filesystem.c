@@ -14,6 +14,9 @@
 #include "filesystem/filesystem.h" // Headers for the core functionality
 #include "filesystem/auxiliary.h"  // Headers for auxiliary functions
 #include "filesystem/metadata.h"   // Type and structure declaration of the file system
+#include <string.h> //memset function
+
+SuperblockType sBlock;
 
 /*
  * @brief 	Generates the proper file system structure in a storage device, as designed by the student.
