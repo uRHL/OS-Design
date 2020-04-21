@@ -66,7 +66,9 @@ InodeDiskType inodos [MAX_iNODE_NUM] ;
 typedef struct {
 	int position;
 	int opened;
-}file_List [MAX_iNODE_NUM];
+}inode_x;
+
+inode_x file_List [MAX_iNODE_NUM];
 
 //No longer needed. Kept in the superblock
 //char imap [numInodes + PADDING_I] ;                 // [BLOCK_SIZE*x]

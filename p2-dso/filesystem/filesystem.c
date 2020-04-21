@@ -43,7 +43,6 @@ int mkFS(long deviceSize)
 		sBlock.firstDataBlock = 49; //superblock in 0 plus 48 inodes
 	    sBlock.deviceSize = deviceSize;
 
-
 	    for (int i=0; i<sBlock.numInodes; i++){           
 	    	sBlock.imap[i] = 0; // free
 	    	}
@@ -55,6 +54,12 @@ int mkFS(long deviceSize)
 	    } 
 		syncronizeWithDisk();
 
+		/*//we also prepare the file array
+		for(int i=0;i<sBlock.numInodes;i++){
+			file_List[i].position=0;
+			file_List[i].opened=0;
+		}
+*/
 	return 0;
 }
 
@@ -64,7 +69,7 @@ int mkFS(long deviceSize)
  */
 int syncronizeWithDisk()
 {
-	// To write block 0 from sBlocks[0] into disk    
+	// To write block 0 from sBlock into disk    
 	bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock) ); 
 	// To write the i-nodes to disk    
 	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
