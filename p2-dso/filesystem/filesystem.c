@@ -135,7 +135,21 @@ int removeFile(char *fileName)
  */
 int openFile(char *fileName)
 {
-	return -2;
+	int inode_id=-1;   
+	//First of all we look if the file exist 
+	for (int i=0; i<sBlock.numInodes; i++){
+		if (! strcmp(inodos[i].name, fileName)){ //This means strcmp returned 0 so they are equal
+			inode_id= i;
+		}
+	}    
+	//If we didn't find we return -1
+	if (inode_id < 0){
+		return inode_id ;
+	}           
+
+	file_List[inode_id].position = 0;    
+	file_List[inode_id].opened   = 1;    
+	return inode_id; 
 }
 
 /*
@@ -144,7 +158,18 @@ int openFile(char *fileName)
  */
 int closeFile(int fileDescriptor)
 {
-	return -1;
+
+	if (fileDescriptor < 0){
+		return -1;
+	}
+	//We look in the inode map if that file has been created. 
+	if (!bitmap_getbit(sBlock.imap, fileDescriptor)){
+		printf("There is no file with that id\n");
+		return -1;
+	}
+	file_List[fileDescriptor].position=0;
+	file_List[fileDescriptor].opened=0;
+	return 0;
 }
 
 /*
