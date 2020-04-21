@@ -30,37 +30,50 @@ int mkFS(long deviceSize)
 	}
 	 // setup with default values the superblock, maps, and i-nodes	 
 	    sBlock.magicNumber = 0x000D5500;   
-		sBlock.numInodes = MAX_iNODE_NUM;
+		sBlock.numInodes = MAX_iNODE_NUM;		
+	    sBlock.numDataBlocks = MAX_NUM_DATABLOCKS;
 
 		//Not needed. See metadata.h
 	    //sBlock.numBlocksInodeMap = ; //Cuantos bloques necesito para mapear todos los nodos (todos los punteros)
 	    //sBlock.numBlocksBlockMap = 48; //Cuantos bloques necesito para mapear todos los data blocks (todos los punteros)
 
-	    sBlock.firstInode = 0; //Superblock
+	    sBlock.firstInode = 1; //Superblock ocupies 1
 		
 		//49 = num Inode blocks + num superblock
-	    sBlock.numDataBlocks = (deviceSize / BLOCK_SIZE) - (49);
+		sBlock.firstDataBlock = 49; //superblock in 0 plus 48 inodes
 	    sBlock.deviceSize = deviceSize;
 
 
 	    for (int i=0; i<sBlock.numInodes; i++){           
 	    	sBlock.imap[i] = 0; // free
 	    	}
-		/*Since bmap contains positions for the maximum possible number of datablocks, 
-		some of them may actually refer to an unexistent block. 
-		Those positions, (when i is greater than numDataBlocks) should be marked as invalid*/
 	    for (int i =0; i<MAX_NUM_DATABLOCKS; i++){
-			if( i>= sBlock.numDataBlocks){
-				sBlock.bmap[i] = -1; // invalid 
-			}else{
-				sBlock.bmap[i] = 0; // free 
-			}	    	
+			sBlock.datablockmap[i] = 0; // free 
 	    }
 	    for (int i=0; i<sBlock.numInodes; i++){
 	    	memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
-	    }          
+	    } 
+		syncronizeWithDisk();
+
 	return 0;
 }
+
+/*
+ * @brief 	Syncronizes local filesytem with disk
+ * @return 	0 if success, -1 otherwise.
+ */
+int syncronizeWithDisk()
+{
+	// To write block 0 from sBlocks[0] into disk    
+	bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock) ); 
+	// To write the i-nodes to disk    
+	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
+		bwrite(DEVICE_IMAGE, 1+i, ((char *)inodos + i*BLOCK_SIZE)); //WE start writing in block 1 because all the previous information is stored in the superblock
+	} 
+	return 0; 
+
+}
+
 
 /*
  * @brief 	Mounts a file system in the simulated device.
@@ -69,22 +82,10 @@ int mkFS(long deviceSize)
 int mountFS(void)
 {
 	// To write block 0 from sBlock into disk    
-	bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock) );
-
-	/* Not needed. Imap and bmap are now contained in the supeerblock 
-	    
-	// To write the i-node map to disk    
-	for (int i=0; i<sBlock.numBlocksInodeMap; i++){
-		bwrite(DEVICE_IMAGE, 1+i, ((char *)sBlock.imap + i*BLOCK_SIZE)) ;    
-		}            
-	// To write the block map to disk    
-	for (int i =0; i<sBlock.numBlocksBlockMap; i++){
-		bwrite(DEVICE_IMAGE, 1+i+sBlock.numBlocksInodeMap, ((char *)sBlock.bmap + i*BLOCK_SIZE));
-	} 
-	*/          
+	bread(DEVICE_IMAGE, 0, (char *)&(sBlock) );           
 	// To write the i-nodes to disk
 	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
-		bwrite(DEVICE_IMAGE, i+sBlock.firstInode, ((char *)inodos + i*BLOCK_SIZE));
+		bread(DEVICE_IMAGE, i+1, ((char *)inodos + i*BLOCK_SIZE));
 	} 
     return 1;
 }
@@ -95,7 +96,14 @@ int mountFS(void)
  */
 int unmountFS(void)
 {
-	return -1;
+	for(int i=0;i<MAX_iNODE_NUM;i++){
+		if (file_List[i].opened==1){
+			printf("There are files that haven't been closed\n");
+			return -1;
+		}
+	}
+	syncronizeWithDisk();
+	return 0;
 }
 
 /*

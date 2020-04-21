@@ -32,12 +32,11 @@ typedef struct {
   unsigned int deviceSize;                 /* Total device size in bytes*/
 
   char imap[MAX_iNODE_NUM];
-  char bmap[251];
+  char datablockmap[MAX_NUM_DATABLOCKS];
   //numDataBlocks = totalBlocks - superblock - iNode blocks = (disk_size / block_size) - 1 - 48
-  //Max disk size = 600 KB --> max number of data blocks = 300 - 1 - 48 = 251
   
-  char padding[1725];                 /* Padding for filling a block */
-  //Padding = BLOCK_SIZE - superblock size = 2048 - (6*4 + 48 + 251) = 1725
+  char padding[1736];                 /* Padding for filling a block */
+  //Padding = BLOCK_SIZE - superblock size = 2048 - (6*4 + 48+ 240) = 1736
 } SuperblockType;
 
 //SuperblockType sBlocks [1] ;
@@ -56,14 +55,18 @@ typedef struct {
     unsigned int inodeTable[5];    /* type==dir: list of inodes from the directory */
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
-    unsigned int directBlock;              /* Direct block number */    
-    unsigned int indirectBlock;              /* Indirect block number */    
-    char padding[1980];            /* Padding for filling a block */
-    //4 + 32 + (5*4) + (4*3) = 68 Bytes per iNode.
+    unsigned int FirstBlock;              /* Direct block number */ 
+    //4*4 + 32 + (5*4) = 68 Bytes per iNode.
+    char padding[1980];
     //Padding = BLOCK_SIZE - iNode size = 2048 - 68 = 1980
 } InodeDiskType;
 
 InodeDiskType inodos [MAX_iNODE_NUM] ;
+
+typedef struct {
+	int position;
+	int opened;
+}file_List [MAX_iNODE_NUM];
 
 //No longer needed. Kept in the superblock
 //char imap [numInodes + PADDING_I] ;                 // [BLOCK_SIZE*x]
