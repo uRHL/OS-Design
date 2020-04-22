@@ -69,10 +69,12 @@ typedef struct {
 InodeDiskType inodos [MAX_iNODE_NUM];
 
 typedef struct {
-	int position;
-	int opened;
-	int actualBlock;
-}inode_x;
+	int position;     // Seek position
+	int opened;       // 0 if closed, 1 if opened
+  int actualBlock   // Current block
+  int integrity;    // 0 if opened without integrity, 1 otherwise
+  int crc32_value;  // CRC-32 integrity value
+} inode_x;
 
 inode_x file_List [MAX_iNODE_NUM];
 

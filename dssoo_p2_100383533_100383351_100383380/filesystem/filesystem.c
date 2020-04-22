@@ -429,7 +429,7 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 	}
 
 	//block_id = bmap(fileDescriptor, file_List[fileDescriptor].position);
-	int cuantoQuedaDeBloque =file_List[fileDescriptor].position % BLOCK_SIZE;
+	int cuantoQuedaDeBloque = file_List[fileDescriptor].position % BLOCK_SIZE;
 
 
 	if (block_id < 0) {
@@ -534,9 +534,52 @@ int lseekFile(int fileDescriptor, long offset, int whence)
  */
 
 int checkFile (char * fileName)
-{
+{	
+	// Open file
+	int fd = openFile(fileName);
 
-    return -2;
+	// Error if the file doesn't exist
+	if (fd == -1) {
+		printf("Error! The file with name %s does not exist in the file system.\n", fileName);
+		closeFile(fd);
+		return -1;
+	}
+
+	// If error opening the file return -2
+	else if (fd == -2) {
+		printf("Error! The file with name %s couldn't be opened.\n", fileName);
+		closeFile(fd);
+		return -2;
+	}
+
+	// Error if file has already integrity
+	if (file_List[fd].crc32_value != 0) {
+		printf("Error! The file with name %s has already integrity.\n", fileName);
+		closeFile(fd);
+		return -2;
+	}
+
+	// Buffer to save file content and to compute CRC-32 value
+	char buffer[inodos[fd].size];
+
+	// Read file
+	readFile(fd, &buffer, len(buffer));
+
+	// Compute CRC-32 value
+	uint32_t val = CRC32(&buffer, strlen(buffer));
+
+	// Check if corrupted file
+	if (val != file_List[fd].crc32_value) {
+		printf("Warning! The file with name %s is corrupted.\n", fileName);
+		closeFile(fd);
+		return -1;
+	}
+
+	// Close file
+	closeFile(fd);
+
+    return 0;
+
 }
 
 /*
@@ -545,8 +588,44 @@ int checkFile (char * fileName)
  */
 
 int includeIntegrity (char * fileName)
-{
-    return -2;
+{	
+	// Open file
+	int fd = openFile(fileName);
+
+	// Error if the file doesn't exist
+	if (fd == -1) {
+		printf("Error! The file with name %s does not exist in the file system.\n", fileName);
+		closeFile(fd);
+		return -1;
+	}
+
+	// If error opening the file return -2
+	else if (fd == -2) {
+		printf("Error! The file with name %s couldn't be opened.\n", fileName);
+		closeFile(fd);
+		return -2;
+	}
+
+	// Error if file has already integrity
+	if (file_List[fd].crc32_value != 0) {
+		printf("Error! The file with name %s has already integrity.\n", fileName);
+		closeFile(fd);
+		return -2;
+	}
+
+	// Buffer to save file content and to compute CRC-32 value
+	char buffer[inodos[fd].size];
+
+	// Read file
+	readFile(fd, &buffer, len(buffer));
+
+	// Add integrity
+	file_List[fd].crc32_value = CRC32(&buffer, strlen(buffer));
+
+	// Close file
+	closeFile(fd);
+
+    return 0;
 }
 
 /*
