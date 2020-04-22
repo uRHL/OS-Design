@@ -118,6 +118,35 @@ int namei(char *fname)
 }
 
 /*
+ * @brief 	Search block with position equal to offset of i-node inodo_id
+ * @return 	block id if success, -1 otherwise.
+ */
+int bmap(int inodo_id, int offset)
+{
+	int b[BLOCK_SIZE / 4];
+
+	// If offset is lower than the block size, return the direct block
+	if (offset < BLOCK_SIZE) {
+		return inodos[inodo_id].FirstBlock;
+	}
+	
+	// Otherwise, it means there are indirect blocks. Therefore, return indirect block
+	if (offset < BLOCK_SIZE * BLOCK_SIZE / 4) {
+		if (bread(DEVICE_IMAGE, inodos[inodo_id].indirectBlock, b) < 0) {
+			printf("Error! Block starting at position %d of i-node %d couldn't be read.\n", offset, inodo_id);
+			return -1;
+		}
+		
+		offset = (offset – BLOCK_SIZE) / BLOCK_SIZE;
+
+		return b[offset];
+	}
+
+	// If error return -1
+	return -1; 
+}
+
+/*
  * @brief 	Generates the proper file system structure in a storage device, as designed by the student.
  * @return 	0 if success, -1 otherwise.
  */
@@ -391,6 +420,11 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 
 	block_id = bmap(fileDescriptor, file_List[fileDescriptor].position);
 
+	if (block_id < 0) {
+		printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
+		return -1;
+	}
+
 	if (bread(DEVICE_IMAGE, block_id, b) < 0) {
 		printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
 		return -1;
@@ -453,7 +487,7 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 {	
 	// If error return -1
 	if (fileDescriptor < 0) {
-		printf("Error! Wrong file descriptor.\n")
+		printf("Error! Wrong file descriptor.\n");
 		return -1;
 	}
 

@@ -53,3 +53,9 @@ int alloc(void);
  * @return 	0 if success, -1 otherwise.
  */
 int freeBlock(int block_id);
+
+/*
+ * @brief 	Search block with position equal to offset of i-node inodo_id
+ * @return 	block id if success, -1 otherwise.
+ */
+int bmap(int inodo_id, int offset);

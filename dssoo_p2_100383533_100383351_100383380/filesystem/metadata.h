@@ -12,6 +12,7 @@
 
 #define T_FILE 1
 #define T_DIRECTORY 2
+#define BLOCK_SIZE 2048
 
 #define bitmap_getbit(bitmap_, i_) (bitmap_[i_ >> 3] & (1 << (i_ & 0x07)))
 static inline void bitmap_setbit(char *bitmap_, int i_, int val_) {
@@ -58,13 +59,14 @@ typedef struct {
     unsigned int inodeTable[5];    /* type==dir: list of inodes from the directory */
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
-    unsigned int FirstBlock;              /* Direct block number */ 
-    //4*4 + 32 + (5*4) = 68 Bytes per iNode.
+    unsigned int FirstBlock;              /* Direct block number */
+    unsigned int indirectBlock;     /* Indirect block number */
+    // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
     char padding[1980];
-    //Padding = BLOCK_SIZE - iNode size = 2048 - 68 = 1980
+    // Padding = BLOCK_SIZE - iNode size = 2048 - 68 = 1980
 } InodeDiskType;
 
-InodeDiskType inodos [MAX_iNODE_NUM] ;
+InodeDiskType inodos [MAX_iNODE_NUM];
 
 typedef struct {
 	int position;
