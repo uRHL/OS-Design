@@ -136,7 +136,7 @@ int bmap(int inodo_id, int offset)
 			printf("Error! Block starting at position %d of i-node %d couldn't be read.\n", offset, inodo_id);
 			return -1;
 		}
-		
+
 		offset = (offset – BLOCK_SIZE) / BLOCK_SIZE;
 
 		return b[offset];
@@ -282,7 +282,7 @@ int unmountFS(void)
 int createFile(char *fileName)
 {	
 	// Error if the file already exists
-	if (namei(fileName) == 0) {
+	if (namei(fileName) != 0) {
 		printf("The file with name %s already exists in the file system.\n", fileName);
 		return -1;
 	}
@@ -522,6 +522,7 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 
 int checkFile (char * fileName)
 {
+
     return -2;
 }
 
