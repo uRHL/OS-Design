@@ -96,7 +96,7 @@ int freeBlock(int block_id)
 
 	// Free block
 	sBlock.datablockmap[block_id] = 0;
-
+	//Comprobar que pasa con los datos que había en esos bloques
 	return 0;
 }
 
@@ -127,7 +127,7 @@ int bmap(int inodo_id, int offset)
 
 	// If offset is lower than the block size, return the direct block
 	if (offset < BLOCK_SIZE) {
-		return inodos[inodo_id].FirstBlock;
+		return inodos[inodo_id].inodeTable[0];
 	}
 	
 	// Otherwise, it means there are indirect blocks. Therefore, return indirect block
@@ -312,7 +312,8 @@ int createFile(char *fileName)
 	// Set file values
 	inodos[inode_id].type = T_FILE ;
 	strcpy(inodos[inode_id].name, fileName);
-	inodos[inode_id].FirstBlock = block_id ;
+	inodos[inode_id].numBlocks = 1 ;
+	inodos[inode_id].inodeTable[0] = block_id;
 	file_List[inode_id].position = 0;
 	file_List[inode_id].opened = 1;
 
@@ -333,18 +334,25 @@ int removeFile(char *fileName)
 		printf("The file %s does not exists.\n", fileName);
 		return -1;
 	}
-
-	// Free block, if error return -2
-	if (freeBlock(inodos[inode_id].FirstBlock) < 0) {
-		printf("Error! Block of file %s couldn't be freed.\n", fileName);
-		return -2;
-	}
 	memset(&(inodos[inode_id]), 0, sizeof(InodeDiskType));
 
 	// Free i-node, if error return -2
 	if (ifree(inode_id) < 0) {
 		printf("Error! i-node of file %s couldn't be freed.\n", fileName);
 		return -2;
+	}
+/*Esto funciona si sólo tenemos un bloque
+	// Free block, if error return -2
+	if (freeBlock(inodos[inode_id].FirstBlock) < 0) {
+		printf("Error! Block of file %s couldn't be freed.\n", fileName);
+		return -2;
+	}*/
+	//Esto elimina todos los bloques que pueda contener
+	for(int i=0;i<inodos[inode_id].numBlocks;i++){
+		if (freeBlock(inodos[inode_id].inodeTable[i]) < 0) {
+		printf("Error! Block of file %s couldn't be freed.\n", fileName);
+		return -2;
+	}
 	}
 
 	printf("File %s removed.\n", fileName);
@@ -368,6 +376,7 @@ int openFile(char *fileName)
     
 	file_List[inode_id].position = 0;	// Seek position = 0
 	file_List[inode_id].opened = 1;		// Open bit = 1
+	file_List[inode_id].actualBlock = 0;	// We are in data Block  0
 
 	printf("File %s opened.\n", fileName);
 	return inode_id; 
@@ -392,6 +401,7 @@ int closeFile(int fileDescriptor)
 
 	file_List[fileDescriptor].position = 0;		// Seek position = 0
 	file_List[fileDescriptor].opened = 0;		// Open bit = 0
+	file_List[inode_id].actualBlock = 0;	// We are in data Block  0
 
 	printf("File with file descriptor %d closed.\n", fileDescriptor);
 	return 0;
@@ -406,19 +416,21 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 	char b[BLOCK_SIZE];
 	int block_id;
 
-	// If file position plus number of bytes to be read is greater that the file size,
-	// the number of bytes to be read is resized to what's left of the file
-	if (file_List[fileDescriptor].position + numBytes > inodos[fileDescriptor].size) {
-		numBytes = inodos[fileDescriptor].size - file_List[fileDescriptor].position;
-	}
-
 	// If error return -1
 	if (numBytes <= 0) {
 		printf("Error! File with id %d couldn't be read.\n", fileDescriptor);
 		return -1;
 	}
 
-	block_id = bmap(fileDescriptor, file_List[fileDescriptor].position);
+	// If file position plus number of bytes to be read is greater that the file size,
+	// the number of bytes to be read is resized to what's left of the file
+	if (file_List[fileDescriptor].position + numBytes > inodos[fileDescriptor].size) {
+		numBytes = inodos[fileDescriptor].size - file_List[fileDescriptor].position;
+	}
+
+	//block_id = bmap(fileDescriptor, file_List[fileDescriptor].position);
+	int cuantoQuedaDeBloque =file_List[fileDescriptor].position % BLOCK_SIZE;
+
 
 	if (block_id < 0) {
 		printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -448,17 +460,18 @@ int writeFile(int fileDescriptor, void *buffer, int numBytes)
 	char b[BLOCK_SIZE];
 	int block_id;
 
-	// If file position plus number of bytes to be written is greater that the file size,
-	// the number of bytes to be written is resized to what's left of the file
-	if (file_List[fileDescriptor].position + numBytes > BLOCK_SIZE) {
-		numBytes = BLOCK_SIZE - file_List[fileDescriptor].position;
-	}
-
 	// If error return -1
 	if (numBytes <= 0) {
 		printf("Error! File with id %d couldn't be written.\n", fileDescriptor);
 		return -1;
 	}
+	// If file position plus number of bytes to be written is greater that the file size,
+	// the number of bytes to be written is resized to what's left of the file
+	if (file_List[fileDescriptor].position + numBytes > 10240) {
+		numBytes = 10240 - file_List[fileDescriptor].position;
+	}
+
+	
 
 	block_id = bmap(fd, file_List[fileDescriptor].position);
 	if (bread(DEVICE_IMAGE, block_id, b) < 0) {

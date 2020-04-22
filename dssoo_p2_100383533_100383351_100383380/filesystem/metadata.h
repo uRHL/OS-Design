@@ -56,10 +56,10 @@ int numDataBlocks = ;
 typedef struct {
     unsigned int type;              /*  T_FILE o T_DIRECTORY */
     char name[32];              /* name of the associated file/directory*/
-    unsigned int inodeTable[5];    /* type==dir: list of inodes from the directory */
+    unsigned int inodeTable[5];    /* type==dir: list of files from the directory */
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
-    unsigned int FirstBlock;              /* Direct block number */
+    unsigned int numBlocks;              /* Number of data blocks used at the moment */
     unsigned int indirectBlock;     /* Indirect block number */
     // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
     char padding[1980];
@@ -71,6 +71,7 @@ InodeDiskType inodos [MAX_iNODE_NUM];
 typedef struct {
 	int position;
 	int opened;
+	int actualBlock;
 }inode_x;
 
 inode_x file_List [MAX_iNODE_NUM];
