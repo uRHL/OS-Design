@@ -4,9 +4,9 @@
  * Operating System Design / Diseño de Sistemas Operativos
  * (c) ARCOS.INF.UC3M.ES
  *
- * @file 	metadata.h
- * @brief 	Definition of the structures and data types of the file system.
- * @date	Last revision 01/04/2020
+ * @file  metadata.h
+ * @brief   Definition of the structures and data types of the file system.
+ * @date  Last revision 01/04/2020
  *
  */
 
@@ -23,7 +23,7 @@ static inline void bitmap_setbit(char *bitmap_, int i_, int val_) {
 }
 
 typedef struct {    
-	unsigned int magicNumber;                 /* Supeblock magic number: 0x000D5500 */
+  unsigned int magicNumber;                 /* Supeblock magic number: 0x000D5500 */
 
   //these are not used since the maps are selfcontained in the superblock
   //unsigned int numBlocksInodeMap;    /* Number of blocks of the inode map*/
@@ -60,10 +60,9 @@ typedef struct {
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
-    unsigned int indirectBlock;     /* Indirect block number */
-    // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
-    char padding[1980];
-    // Padding = BLOCK_SIZE - iNode size = 2048 - 68 = 1980
+    // 4*3 + 32 + (5*4) = 64 Bytes per iNode.
+    char padding[1984];
+    // Padding = BLOCK_SIZE - iNode size = 2048 - 64 = 1980
 } InodeDiskType;
 
 InodeDiskType inodos [MAX_iNODE_NUM];
