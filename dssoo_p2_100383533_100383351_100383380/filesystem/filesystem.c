@@ -282,7 +282,7 @@ int unmountFS(void)
 int createFile(char *fileName)
 {	
 	// Error if the file already exists
-	if (namei(fileName) != 0) {
+	if (namei(fileName) == 0) {
 		printf("The file with name %s already exists in the file system.\n", fileName);
 		return -1;
 	}
