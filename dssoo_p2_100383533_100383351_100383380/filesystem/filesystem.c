@@ -116,12 +116,31 @@ int namei(char *fname)
 	
 	return -1;
 }
+/*
+ * @brief 	Allocate blocks when writing more than 1
+ * @return 	block id if success, -1 otherwise.
+ */
+int allocateInWrite(int fileDescriptor){	
+	int actualBlock=file_List[fileDescriptor].actualBlock;
+	int newBlock_id=0;
+	if (actualBlock<4){ //If it's 4 we cant add more blocks
+		newBlock_id =alloc();
+		if(newBlock_id<0){
+			return -1; //Problem allocating the block
+		}
+		actualBlock++;
+		inodos[fileDescriptor].inodeTable[actualBlock]=newBlock_id;
+		inodos[fileDescriptor].numBlocks++;
+		file_List[fileDescriptor].actualBlock=actualBlock;
+	}
+	return newBlock_id;
+}
 
 /*
  * @brief 	Search block with position equal to offset of i-node inodo_id
  * @return 	block id if success, -1 otherwise.
  */
-int bmap(int inodo_id, int offset)
+/*int bmap(int inodo_id, int offset)
 {
 	int b[BLOCK_SIZE / 4];
 
@@ -144,7 +163,7 @@ int bmap(int inodo_id, int offset)
 
 	// If error return -1
 	return -1; 
-}
+}*/
 
 /*
  * @brief 	Generates the proper file system structure in a storage device, as designed by the student.
@@ -208,8 +227,8 @@ int mkFS(long deviceSize)
  */
 int syncronizeWithDisk()
 {
-	// Write block 0 from sBlock into disk, if error return -1
-	if (bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock)) < 0) {
+	// Write block sBlock into disk, if error return -1
+	if (bwrite(DEVICE_IMAGE, 1, (char *)&(sBlock)) < 0) {
 		printf("Error! Cannot write block 0 from sBlock into disk.\n");
 		return -1;
 	}
@@ -401,7 +420,7 @@ int closeFile(int fileDescriptor)
 
 	file_List[fileDescriptor].position = 0;		// Seek position = 0
 	file_List[fileDescriptor].opened = 0;		// Open bit = 0
-	file_List[inode_id].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
 
 	printf("File with file descriptor %d closed.\n", fileDescriptor);
 	return 0;
@@ -434,7 +453,7 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 
 	//Parte 1, terminar de leer el bloque actal
 	int cuantoQuedaDeBloque =file_List[fileDescriptor].position % BLOCK_SIZE;
-	block_id = file_List[fileDescirptor].actualBlock;
+	block_id = file_List[fileDescriptor].actualBlock;
 
 	if (block_id < 0) {
 		printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -446,17 +465,18 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 		return -1;
 	}
 	// Save content to buffer
-	memmove(buffer, b + file_List[fileDescriptor].position, cuantoQuedaDeBloque);
+	memmove(buffer, b + (file_List[fileDescriptor].position % BLOCK_SIZE), cuantoQuedaDeBloque); //Así cogemos la posición en ese bloque
 	// Increase file position
 	file_List[fileDescriptor].position += cuantoQuedaDeBloque;
-	file_List[fileDescirptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+	int actualBlock= file_List[fileDescriptor].actualBlock;
+	file_List[fileDescriptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
 	numBytes -=cuantoQuedaDeBloque;
 	//Fin parte 1
 
 	//Parte 2: Hacer loop con los que podamos hacer bloques enteros
 	int VueltasAlLoop =numBytes/BLOCK_SIZE; //Al truncar, obtendremos los bloques enteros que leemos
-	while (VueltasAlLoop>0){
-		block_id = file_List[fileDescirptor].actualBlock;
+	for(int i=0; i<VueltasAlLoop;i++){
+		block_id = file_List[fileDescriptor].actualBlock;
 
 		if (block_id < 0) {
 			printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -468,17 +488,18 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 			return -1;
 		}
 		// Save content to buffer
-		memmove(buffer, b + file_List[fileDescriptor].position, BLOCK_SIZE);
+		memmove(buffer+cuantoQuedaDeBloque+i*BLOCK_SIZE, b + (file_List[fileDescriptor].position % BLOCK_SIZE), BLOCK_SIZE); //Esta vez la posición debería ser 0 durante el calculo, porque empezamos bloque
 		// Increase file position
 		file_List[fileDescriptor].position += BLOCK_SIZE;
-		file_List[fileDescirptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+		actualBlock= file_List[fileDescriptor].actualBlock;
+		file_List[fileDescriptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
 		numBytes -=BLOCK_SIZE;
 	}
 	//Fin parte 2
 
 	//Parte 3: Leemos lo que quede
 	if(numBytes>0){
-		block_id = file_List[fileDescirptor].actualBlock;
+		block_id = file_List[fileDescriptor].actualBlock;
 
 		if (block_id < 0) {
 			printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -490,11 +511,10 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 			return -1;
 		}
 		// Save content to buffer
-		memmove(buffer, b + file_List[fileDescriptor].position, numBytes);
+		memmove(buffer+cuantoQuedaDeBloque+VueltasAlLoop*BLOCK_SIZE, b+ (file_List[fileDescriptor].position % BLOCK_SIZE), numBytes);
 		// Increase file position
 		file_List[fileDescriptor].position += numBytes;
 		//En esta version no superamos el bloque actual por lo que no lo actualizamos
-		numBytes -=BLOCK_SIZE;
 	}
 	//Fin Parte 3
 	return bytesRead;
@@ -519,27 +539,69 @@ int writeFile(int fileDescriptor, void *buffer, int numBytes)
 	if (file_List[fileDescriptor].position + numBytes > 10240) {
 		numBytes = 10240 - file_List[fileDescriptor].position;
 	}
+	int bytesWritten=numBytes;
 	//block_id = bmap(fd, file_List[fileDescriptor].position);
 
+
+    //Parte 1
 	int cuantoQuedaDeBloque =file_List[fileDescriptor].position % BLOCK_SIZE;
-	block_id = file_List[fileDescirptor].actualBlock;
+	block_id = file_List[fileDescriptor].actualBlock;
 	
 	if (bread(DEVICE_IMAGE, block_id, b) < 0) {
 		printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
 		return -1;
 	}
-
 	// Write content to file
-	memmove(b + file_List[fileDescriptor].position, buffer, numBytes);
+	memmove(b + file_List[fileDescriptor].position%BLOCK_SIZE, buffer, cuantoQuedaDeBloque);
 	bwrite(DEVICE_IMAGE, block_id, b);
-
 	// Increase file position
-	fileDescriptor[fileDescriptor].position += numBytes;
+	file_List[fileDescriptor].position += cuantoQuedaDeBloque;
+	// Increase file size
+	inodos[fileDescriptor].size += cuantoQuedaDeBloque;
+	numBytes -=cuantoQuedaDeBloque;
 
+	//Now we need to allocate a new data block
+	int newBlock_id=allocateInWrite(fileDescriptor);
+	if(newBlock_id<0){
+		return -1;
+	}
+	//End part 1
+
+	//Loop part 2
+	int VueltasAlLoop =numBytes/BLOCK_SIZE; //Al truncar, obtendremos los bloques enteros que leemos
+	for(int i=0; i<VueltasAlLoop;i++){
+		if (bread(DEVICE_IMAGE, newBlock_id, b) < 0) {
+			printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+			return -1;
+		}
+	// Write content to file
+	memmove(b + file_List[fileDescriptor].position%BLOCK_SIZE, buffer+cuantoQuedaDeBloque+i*BLOCK_SIZE, BLOCK_SIZE);
+	bwrite(DEVICE_IMAGE, block_id, b);
+	// Increase file position
+	file_List[fileDescriptor].position += BLOCK_SIZE;
+	// Increase file size
+	inodos[fileDescriptor].size += BLOCK_SIZE;
+	numBytes -=BLOCK_SIZE;
+	newBlock_id=allocateInWrite(fileDescriptor);
+		if(newBlock_id<0){
+			return -1;
+		}
+	}
+	//End part 2
+
+	//Part 3:The rest
+	if(numBytes>0){
+		if (bread(DEVICE_IMAGE, block_id, b) < 0) {
+			printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+			return -1;
+		}	
+	memmove(b + file_List[fileDescriptor].position%BLOCK_SIZE, buffer+cuantoQuedaDeBloque+VueltasAlLoop*BLOCK_SIZE, numBytes);
+	bwrite(DEVICE_IMAGE, block_id, b);	
+	file_List[fileDescriptor].position += numBytes;
 	// Increase file size
 	inodos[fileDescriptor].size += numBytes;
-
-	return numBytes; 
+	}
+	return bytesWritten; 
 }
 
 /*
