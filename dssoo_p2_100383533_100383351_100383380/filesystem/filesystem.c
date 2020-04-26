@@ -619,16 +619,19 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 	// Change file position to the beginning
 	if (whence == FS_SEEK_BEGIN) {
 		file_List[fileDescriptor].position = 0;
+		file_List[fileDescriptor].actualBlock=0;
 	}
 
 	// Change file position to its current position plus an offset
 	else if (whence == FS_SEEK_CUR && file_List[fileDescriptor].position + offset <= inodos[fileDescriptor].size) {
 		file_List[fileDescriptor].position += offset;
+		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
 	}
 
 	// Change file position to the end
 	else if (whence == FS_SEEK_END) {
 		file_List[fileDescriptor].position = inodos[fileDescriptor].size;
+		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
 	}
 
 	// If error return -1

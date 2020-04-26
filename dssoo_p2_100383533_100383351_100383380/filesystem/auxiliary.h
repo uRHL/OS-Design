@@ -59,3 +59,9 @@ int freeBlock(int block_id);
  * @return 	block id if success, -1 otherwise.
  */
 int bmap(int inodo_id, int offset);
+
+/*
+ * @brief 	Allocate blocks when writing more than 1
+ * @return 	block id if success, -1 otherwise.
+ */
+int allocateInWrite(int fileDescriptor)
