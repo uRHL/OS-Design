@@ -395,10 +395,16 @@ int openFile(char *fileName)
 
 	// If file is already opened return -2
 	if (file_List[fileDescriptor].opened == 1) {
-		printf("Error! File with file descriptor %d is already opened.\n", fileDescriptor);
+		printf("Error! File with name %s is already opened.\n", fileName);
 		return -2;
 	}
     
+	// Error if file has integrity
+	if (file_List[fileDescriptor].crc32_value != 0) {
+		printf("Error! File with name %s cannot be opened without integrity.\n", fileName);
+		return -2;
+	}
+
 	file_List[fileDescriptor].position = 0;	// Seek position = 0
 	file_List[fileDescriptor].opened = 1;		// Open bit = 1
 	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
@@ -427,6 +433,12 @@ int closeFile(int fileDescriptor)
 	// If file wasn't opened return -1
 	if (file_List[fileDescriptor].opened == 0) {
 		printf("Error! File with file descriptor %d wasn't opened.\n", fileDescriptor);
+		return -1;
+	}
+
+	// If file was opened with integrity return -1
+	if (file_List[fileDescriptor].integrity == 1) {
+		printf("Error! File with file descriptor %d wasn't opened without integrity.\n", fileDescriptor);
 		return -1;
 	}
 
@@ -680,7 +692,7 @@ int checkFile (char * fileName)
 	}
 
 	// If file without integrity return -4
-	else if (file_List[fileDescriptor].integrity == 0) {
+	else if (file_List[fileDescriptor].crc32_value == 0) {
 		printf("Error! The file with name %s doesn't have integrity value.\n", fileName);
 		closeFile(fileDescriptor);
 		return -4;
