@@ -385,20 +385,26 @@ int removeFile(char *fileName)
 int openFile(char *fileName)
 {  
 	//First of all we look if the file exist, if we didn't find we return -1
-	int inode_id = namei(fileName);
+	int fileDescriptor = namei(fileName);
 
 	// If error return -1
-	if (inode_id < 0) {
+	if (fileDescriptor < 0) {
 		printf("Error! File %s doesn't exist.\n", fileName);
 		return -1 ;
 	}
+
+	// If file is already opened return -2
+	if (file_List[fileDescriptor].opened == 1) {
+		printf("Error! File with file descriptor %d is already opened.\n", fileDescriptor);
+		return -2;
+	}
     
-	file_List[inode_id].position = 0;	// Seek position = 0
-	file_List[inode_id].opened = 1;		// Open bit = 1
-	file_List[inode_id].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].position = 0;	// Seek position = 0
+	file_List[fileDescriptor].opened = 1;		// Open bit = 1
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
 
 	printf("File %s opened.\n", fileName);
-	return inode_id; 
+	return fileDescriptor; 
 }
 
 /*
@@ -415,6 +421,12 @@ int closeFile(int fileDescriptor)
 	//We look in the inode map if that file has been created. 
 	if (!bitmap_getbit(sBlock.imap, fileDescriptor)){
 		printf("Error! There is no file with such file descriptor.\n");
+		return -1;
+	}
+
+	// If file wasn't opened return -1
+	if (file_List[fileDescriptor].opened == 0) {
+		printf("Error! File with file descriptor %d wasn't opened.\n", fileDescriptor);
 		return -1;
 	}
 
@@ -643,7 +655,6 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 	return 0;
 }
 
-
 /*
  * @brief	Checks the integrity of the file.
  * @return	0 if success, -1 if the file is corrupted, -2 in case of error.
@@ -652,50 +663,49 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 int checkFile (char * fileName)
 {	
 	// Open file
-	int fd = openFile(fileName);
+	int fileDescriptor = openFile(fileName);
 
 	// Error if the file doesn't exist
-	if (fd == -1) {
+	if (fileDescriptor == -1) {
 		printf("Error! The file with name %s does not exist in the file system.\n", fileName);
-		closeFile(fd);
-		return -1;
+		closeFile(fileDescriptor);
+		return -2;
 	}
 
-	// If error opening the file return -2
-	else if (fd == -2) {
+	// If error opening the file return -3
+	else if (fileDescriptor == -2) {
 		printf("Error! The file with name %s couldn't be opened.\n", fileName);
-		closeFile(fd);
-		return -2;
+		closeFile(fileDescriptor);
+		return -3;
 	}
 
-	// Error if file has already integrity
-	if (file_List[fd].crc32_value != 0) {
-		printf("Error! The file with name %s has already integrity.\n", fileName);
-		closeFile(fd);
-		return -2;
+	// If file without integrity return -4
+	else if (file_List[fileDescriptor].integrity == 0) {
+		printf("Error! The file with name %s doesn't have integrity value.\n", fileName);
+		closeFile(fileDescriptor);
+		return -4;
 	}
 
 	// Buffer to save file content and to compute CRC-32 value
-	char buffer[inodos[fd].size];
+	char buffer[inodos[fileDescriptor].size];
 
 	// Read file
-	readFile(fd, &buffer, len(buffer));
+	readFile(fileDescriptor, &buffer, len(buffer));
 
 	// Compute CRC-32 value
 	uint32_t val = CRC32(&buffer, strlen(buffer));
 
 	// Check if corrupted file
-	if (val != file_List[fd].crc32_value) {
+	if (val != file_List[fileDescriptor].crc32_value) {
 		printf("Warning! The file with name %s is corrupted.\n", fileName);
-		closeFile(fd);
+		closeFile(fileDescriptor);
 		return -1;
 	}
 
 	// Close file
-	closeFile(fd);
+	closeFile(fileDescriptor);
 
     return 0;
-
 }
 
 /*
@@ -706,40 +716,40 @@ int checkFile (char * fileName)
 int includeIntegrity (char * fileName)
 {	
 	// Open file
-	int fd = openFile(fileName);
+	int fileDescriptor = openFile(fileName);
 
 	// Error if the file doesn't exist
-	if (fd == -1) {
+	if (fileDescriptor == -1) {
 		printf("Error! The file with name %s does not exist in the file system.\n", fileName);
 		closeFile(fd);
 		return -1;
 	}
 
 	// If error opening the file return -2
-	else if (fd == -2) {
+	else if (fileDescriptor == -2) {
 		printf("Error! The file with name %s couldn't be opened.\n", fileName);
-		closeFile(fd);
+		closeFile(fileDescriptor);
 		return -2;
 	}
 
 	// Error if file has already integrity
-	if (file_List[fd].crc32_value != 0) {
+	if (file_List[fileDescriptor].crc32_value != 0) {
 		printf("Error! The file with name %s has already integrity.\n", fileName);
-		closeFile(fd);
+		closeFile(fileDescriptor);
 		return -2;
 	}
 
 	// Buffer to save file content and to compute CRC-32 value
-	char buffer[inodos[fd].size];
+	char buffer[inodos[fileDescriptor].size];
 
 	// Read file
-	readFile(fd, &buffer, len(buffer));
+	readFile(fileDescriptor, &buffer, len(buffer));
 
 	// Add integrity
-	file_List[fd].crc32_value = CRC32(&buffer, strlen(buffer));
+	file_List[fileDescriptor].crc32_value = CRC32(&buffer, strlen(buffer));
 
 	// Close file
-	closeFile(fd);
+	closeFile(fileDescriptor);
 
     return 0;
 }
@@ -750,8 +760,31 @@ int includeIntegrity (char * fileName)
  */
 int openFileIntegrity(char *fileName)
 {
+	// Check file integrity
+	if (checkFile(fileName) == -2) {
+		return -1;
+	}
 
-    return -2;
+	else if (checkFile(fileName) == -1) {
+		return -2;
+	}
+
+	else if (checkFile(fileName) == -3) {
+		return -3;
+	}
+
+	else if (checkFile(fileName) == -4) {
+		return -3;
+	}
+
+	// Open file
+	int fileDescriptor = openFile(fileName);
+
+	file_List[fileDescriptor].integrity = 1;	// Opened with integrity bit = 1
+	file_List[fileDescriptor].position = 0;		// Seek pointer = 0
+
+	printf("File %s opened with integrity.\n", fileName);
+	return fileDescriptor;
 }
 
 /*
@@ -760,7 +793,46 @@ int openFileIntegrity(char *fileName)
  */
 int closeFileIntegrity(int fileDescriptor)
 {
-    return -1;
+    if (fileDescriptor < 0){
+		printf("Error! Wrong file descriptor.\n");
+		return -1;
+	}
+
+	// We look in the inode map if that file has been created. 
+	if (!bitmap_getbit(sBlock.imap, fileDescriptor)){
+		printf("Error! There is no file with such file descriptor.\n");
+		return -1;
+	}
+
+	// If file wasn't opened return -1
+	if (file_List[fileDescriptor].opened == 0) {
+		printf("Error! File with file descriptor %d wasn't opened.\n", fileDescriptor);
+		return -1;
+	}
+
+	// If file wasn't opened with integrity check return -1
+	if (file_List[fileDescriptor].integrity == 0) {
+		printf("Error! File with file descriptor %d wasn't opened with integrity.\n", fileDescriptor);
+		return -1;
+	}
+
+	// Buffer to save file content and to compute CRC-32 value
+	char buffer[inodos[fileDescriptor].size];
+
+	// Read file
+	readFile(fileDescriptor, &buffer, len(buffer));
+
+	// Add integrity
+	file_List[fileDescriptor].crc32_value = CRC32(&buffer, strlen(buffer));
+
+	// Close file
+	file_List[fileDescriptor].position = 0;		// Seek position = 0
+	file_List[fileDescriptor].opened = 0;		// Open bit = 0
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].integrity = 0;	// Opened with integrity bit = 0
+
+	printf("File with file descriptor %d closed.\n", fileDescriptor);
+	return 0;
 }
 
 /*
