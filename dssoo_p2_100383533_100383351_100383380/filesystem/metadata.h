@@ -39,8 +39,8 @@ typedef struct {
   char datablockmap[MAX_NUM_DATABLOCKS];
   
   
-  char padding[1736];                 /* Padding for filling a block */
-  //Padding = BLOCK_SIZE - superblock size = 2048 - (6*4 + 48+ 240) = 1736
+  char padding[1679];                 /* Padding for filling a block */
+  //Padding = BLOCK_SIZE - superblock size = 2048 - (6*4 + 48+ 297) = 1679
 } SuperblockType;
 
 //SuperblockType sBlocks [1] ;
@@ -60,17 +60,17 @@ typedef struct {
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
-    // 4*3 + 32 + (5*4) = 64 Bytes per iNode.
+    // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
     //padding not needed with the inode block array
-    //char padding[1984];
-    // Padding = BLOCK_SIZE - iNode size = 2048 - 64 = 1984
+    //char padding[1980];
+    // Padding = BLOCK_SIZE - iNode size = 2048 - 68 = 1980
     
 } InodeDiskType;
 
 typedef struct {
   InodeDiskType inodeList [24];
-  char padding[512];
-  //padding = block_size - array_size = 2048 - 64*24 = 512
+  char padding[416];
+  //padding = block_size - array_size = 2048 - 68*24 = 416 bytes
 } InodeBlockArray;
 
 //InodeDiskType inodos [MAX_iNODE_NUM];
