@@ -37,7 +37,7 @@ typedef struct {
 
   char imap[MAX_iNODE_NUM];
   char datablockmap[MAX_NUM_DATABLOCKS];
-  //numDataBlocks = totalBlocks - superblock - iNode blocks = (disk_size / block_size) - 1 - 48
+  
   
   char padding[1736];                 /* Padding for filling a block */
   //Padding = BLOCK_SIZE - superblock size = 2048 - (6*4 + 48+ 240) = 1736
