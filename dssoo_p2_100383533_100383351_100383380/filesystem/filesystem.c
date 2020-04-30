@@ -31,7 +31,10 @@ int ialloc(void)
 			sBlock.imap[i] = 1;
 
 			// Default values for the i-node
-			memset(&(inodos[i]), 0, sizeof(InodeDiskType));
+			//memset(&(inodos[i]), 0, sizeof(InodeDiskType)); //Using 1 inode per block
+
+			//Using inode block array
+			memset(&(inodosBlock[i / iNODES_PER_BLOCK].inodeList[i % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
 
 			// Return the i-node indentification
 			return i;
@@ -109,7 +112,7 @@ int namei(char *fname)
 {
 	// If i-node with name equal to fname, return i-node
 	for (int i = 0; i < sBlock.numDataBlocks; i++){
- 		if (strcmp(inodos[i].name, fname) == 0) {
+ 		if (strcmp(inodosBlock[i / iNODES_PER_BLOCK].inodeList[i % iNODES_PER_BLOCK].name, fname) == 0) {
  			return i;
 		}
  	}
@@ -121,17 +124,22 @@ int namei(char *fname)
  * @return 	block id if success, -1 otherwise.
  */
 int allocateInWrite(int fileDescriptor){	
-	int actualBlock=file_List[fileDescriptor].actualBlock;
-	int newBlock_id=0;
-	if (actualBlock<4){ //If it's 4 we cant add more blocks
-		newBlock_id =alloc();
-		if(newBlock_id<0){
+	int actualBlock = file_List[fileDescriptor].actualBlock;
+	int newBlock_id = 0;
+	if (actualBlock < 4){ //If it's 4 we cant add more blocks
+		newBlock_id = alloc();
+		if (newBlock_id < 0){
 			return -1; //Problem allocating the block
 		}
 		actualBlock++;
+		
+		/*
 		inodos[fileDescriptor].inodeTable[actualBlock]=newBlock_id;
 		inodos[fileDescriptor].numBlocks++;
-		file_List[fileDescriptor].actualBlock=actualBlock;
+		*/
+		inodosBlock[fileDescriptor/iNODES_PER_BLOCK].inodeList[fileDescriptor%iNODES_PER_BLOCK].inodeTable[actualBlock] = newBlock_id;
+		inodosBlock[fileDescriptor/iNODES_PER_BLOCK].inodeList[fileDescriptor%iNODES_PER_BLOCK].numBlocks++;
+		file_List[fileDescriptor].actualBlock = actualBlock;
 	}
 	return newBlock_id;
 }
@@ -203,7 +211,8 @@ int mkFS(long deviceSize)
 	}
 
 	for (int i = 0; i < sBlock.numInodes; i++){
-	    memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
+	    //memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
+		memset(&(inodosBlock[i/iNODES_PER_BLOCK].inodeList[i%iNODES_PER_BLOCK], 0, sizeof(InodeDiskType)));
 	} 
 
 	// Synchronize disk
@@ -236,8 +245,15 @@ int syncronizeWithDisk()
 
 	// Write the i-nodes to disk, if error return -1
 	// We start writing in block 1 because all the previous information is stored in the superblock
+	/*
 	for (int i = 0; i < (sBlock.numInodes * sizeof(InodeDiskType) / BLOCK_SIZE); i++){
 		if (bwrite(DEVICE_IMAGE, 1 + i, ((char *)inodos + i * BLOCK_SIZE)) < 0) {
+			printf("Error! Cannot write block %d from sBlock into disk.\n", i);
+			return -1;
+		}
+	}*/
+	for (int i = 0; i < (sBlock.numInodes / iNODES_PER_BLOCK); i++){
+		if (bwrite(DEVICE_IMAGE, 1 + i, (char *)&inodosBlock[i]) < 0) {
 			printf("Error! Cannot write block %d from sBlock into disk.\n", i);
 			return -1;
 		}
@@ -259,10 +275,19 @@ int mountFS(void)
 		return -1;
 	}
 
-	// Write i-nodes to disk
+	/* version using 1 inode per block
 	for (int i = 0; i < (sBlock.numInodes * sizeof(InodeDiskType) / BLOCK_SIZE); i++){
 		if (bread(DEVICE_IMAGE, i + 1, ((char *)inodos + i * BLOCK_SIZE))) {
 			printf("Error! Cannot write block %d from disk into sBlock.\n", i);
+			return -1;
+		}
+	}*/
+
+	// Write i-nodes to disk
+	//Version using inode block array
+	for (int i = 0; i < (sBlock.numInodes / iNODES_PER_BLOCK); i++){
+		if (bread(DEVICE_IMAGE, 1 + i, (char *)&inodosBlock[i]) < 0) {
+			printf("Error! Cannot write block %d from sBlock into disk.\n", i);
 			return -1;
 		}
 	}
@@ -330,10 +355,12 @@ int createFile(char *fileName)
 	}
 
 	// Set file values
-	inodos[inode_id].type = T_FILE ;
-	strcpy(inodos[inode_id].name, fileName);
-	inodos[inode_id].numBlocks = 1 ;
-	inodos[inode_id].inodeTable[0] = block_id;
+	//inodos[i] = inodosBlock[i / iNODES_PER_BLOCK].inodeList[i % iNODES_PER_BLOCK]
+	
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type = T_FILE ;
+	strcpy(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].name, fileName);
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].numBlocks = 1 ;
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].inodeTable[0] = block_id;
 	file_List[inode_id].position = 0;
 	file_List[inode_id].opened = 1;
 
@@ -354,7 +381,7 @@ int removeFile(char *fileName)
 		printf("The file %s does not exists.\n", fileName);
 		return -1;
 	}
-	memset(&(inodos[inode_id]), 0, sizeof(InodeDiskType));
+	memset(&(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
 
 	// Free i-node, if error return -2
 	if (ifree(inode_id) < 0) {
@@ -368,11 +395,11 @@ int removeFile(char *fileName)
 		return -2;
 	}*/
 	//Esto elimina todos los bloques que pueda contener
-	for(int i=0;i<inodos[inode_id].numBlocks;i++){
-		if (freeBlock(inodos[inode_id].inodeTable[i]) < 0) {
+	for(int i = 0;i < (inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].numBlocks); i++){
+		if (freeBlock(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].inodeTable[i]) < 0) {
 		printf("Error! Block of file %s couldn't be freed.\n", fileName);
 		return -2;
-	}
+		}
 	}
 
 	printf("File %s removed.\n", fileName);
@@ -468,9 +495,16 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 
 	// If file position plus number of bytes to be read is greater that the file size,
 	// the number of bytes to be read is resized to what's left of the file
+
+	/* Version using 1 inode per block
 	if (file_List[fileDescriptor].position + numBytes > inodos[fileDescriptor].size) {
 		numBytes = inodos[fileDescriptor].size - file_List[fileDescriptor].position;
-	}
+	}*/
+
+	//VErsion using inode block array
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	if (file_List[fileDescriptor].position + numBytes > inodeSize) {
+		numBytes = inodeSize - file_List[fileDescriptor].position;
 
 	int bytesRead= numBytes;//Lo usaremos al final
 
@@ -494,13 +528,13 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 	// Increase file position
 	file_List[fileDescriptor].position += cuantoQuedaDeBloque;
 	int actualBlock= file_List[fileDescriptor].actualBlock;
-	file_List[fileDescriptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
-	numBytes -=cuantoQuedaDeBloque;
+	file_List[fileDescriptor].actualBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock + 1];//Comprobar que esto funciones realmente así
+	numBytes -= cuantoQuedaDeBloque;
 	//Fin parte 1
 
 	//Parte 2: Hacer loop con los que podamos hacer bloques enteros
-	int VueltasAlLoop =numBytes/BLOCK_SIZE; //Al truncar, obtendremos los bloques enteros que leemos
-	for(int i=0; i<VueltasAlLoop;i++){
+	int VueltasAlLoop = numBytes/BLOCK_SIZE; //Al truncar, obtendremos los bloques enteros que leemos
+	for(int i = 0; i < VueltasAlLoop; i++){
 		block_id = file_List[fileDescriptor].actualBlock;
 
 		if (block_id < 0) {
@@ -517,8 +551,13 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 		// Increase file position
 		file_List[fileDescriptor].position += BLOCK_SIZE;
 		actualBlock= file_List[fileDescriptor].actualBlock;
-		file_List[fileDescriptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
-		numBytes -=BLOCK_SIZE;
+
+		//Version using 1 inode per block
+		//file_List[fileDescriptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+
+		//Version using inode block array
+		file_List[fileDescriptor].actualBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+		numBytes -= BLOCK_SIZE;
 	}
 	//Fin parte 2
 
@@ -582,7 +621,8 @@ int writeFile(int fileDescriptor, void *buffer, int numBytes)
 	// Increase file position
 	file_List[fileDescriptor].position += cuantoQuedaDeBloque;
 	// Increase file size
-	inodos[fileDescriptor].size += cuantoQuedaDeBloque;
+	//inodos[fileDescriptor].size += cuantoQuedaDeBloque;
+	inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size += cuantoQuedaDeBloque;
 	numBytes -=cuantoQuedaDeBloque;
 
 	//Now we need to allocate a new data block
@@ -605,7 +645,8 @@ int writeFile(int fileDescriptor, void *buffer, int numBytes)
 	// Increase file position
 	file_List[fileDescriptor].position += BLOCK_SIZE;
 	// Increase file size
-	inodos[fileDescriptor].size += BLOCK_SIZE;
+	//inodos[fileDescriptor].size += BLOCK_SIZE;
+	inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size += BLOCK_SIZE;
 	numBytes -=BLOCK_SIZE;
 	newBlock_id=allocateInWrite(fileDescriptor);
 		if(newBlock_id<0){
@@ -624,7 +665,8 @@ int writeFile(int fileDescriptor, void *buffer, int numBytes)
 	bwrite(DEVICE_IMAGE, block_id, b);	
 	file_List[fileDescriptor].position += numBytes;
 	// Increase file size
-	inodos[fileDescriptor].size += numBytes;
+	//inodos[fileDescriptor].size += numBytes;
+	inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size += numBytes;
 	}
 	return bytesWritten; 
 }
@@ -647,15 +689,26 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 		file_List[fileDescriptor].actualBlock=0;
 	}
 
-	// Change file position to its current position plus an offset
+	// Change file position to its current position plus an offset	
+
+	/* Version using 1 inode per block
 	else if (whence == FS_SEEK_CUR && file_List[fileDescriptor].position + offset <= inodos[fileDescriptor].size) {
+		file_List[fileDescriptor].position += offset;
+		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
+	}*/
+
+	//Version using inode block array
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+
+	else if (whence == FS_SEEK_CUR && file_List[fileDescriptor].position + offset <= inodeSize) {
 		file_List[fileDescriptor].position += offset;
 		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
 	}
 
 	// Change file position to the end
 	else if (whence == FS_SEEK_END) {
-		file_List[fileDescriptor].position = inodos[fileDescriptor].size;
+		//file_List[fileDescriptor].position = inodos[fileDescriptor].size;
+		file_List[fileDescriptor].position = inodeSize;
 		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
 	}
 
@@ -700,7 +753,8 @@ int checkFile (char * fileName)
 	}
 
 	// Buffer to save file content and to compute CRC-32 value
-	char buffer[inodos[fileDescriptor].size];
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	char buffer[inodeSize];
 
 	// Read file
 	readFile(fileDescriptor, &buffer, len(buffer));
@@ -753,7 +807,8 @@ int includeIntegrity (char * fileName)
 	}
 
 	// Buffer to save file content and to compute CRC-32 value
-	char buffer[inodos[fileDescriptor].size];
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	char buffer[inodeSize];
 
 	// Read file
 	readFile(fileDescriptor, &buffer, len(buffer));
@@ -830,7 +885,8 @@ int closeFileIntegrity(int fileDescriptor)
 	}
 
 	// Buffer to save file content and to compute CRC-32 value
-	char buffer[inodos[fileDescriptor].size];
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	char buffer[inodeSize];
 
 	// Read file
 	readFile(fileDescriptor, &buffer, len(buffer));

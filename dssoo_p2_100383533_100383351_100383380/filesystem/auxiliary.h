@@ -14,6 +14,7 @@
 #define MAX_DISK_SIZE 614400 //600 KB
 #define MIN_DISK_SIZE 471040 //460 KB
 #define MAX_iNODE_NUM 48
+#define iNODES_PER_BLOCK 24
 #define MAX_NUM_DATABLOCKS 297
 //max numDataBlocks = totalBlocks - superblock - iNode blocks = (max_disk_size / block_size) - 3
 // max number of USED data blocks = 48 files * 10kb per file *1024 /2048 bytes per block = 240 blocks

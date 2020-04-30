@@ -61,11 +61,20 @@ typedef struct {
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
     // 4*3 + 32 + (5*4) = 64 Bytes per iNode.
-    char padding[1984];
+    //padding not needed with the inode block array
+    //char padding[1984];
     // Padding = BLOCK_SIZE - iNode size = 2048 - 64 = 1984
+    
 } InodeDiskType;
 
-InodeDiskType inodos [MAX_iNODE_NUM];
+typedef struct {
+  InodeDiskType inodeList [24];
+  char padding[512];
+  //padding = block_size - array_size = 2048 - 64*24 = 512
+} InodeBlockArray;
+
+//InodeDiskType inodos [MAX_iNODE_NUM];
+InodeBlockArray inodosBlock [MAX_iNODE_NUM/iNODES_PER_BLOCK];
 
 typedef struct {
 	int position;     // Seek position
@@ -80,9 +89,3 @@ inode_x file_List [MAX_iNODE_NUM];
 //No longer needed. Kept in the superblock
 //char imap [numInodes + PADDING_I] ;                 // [BLOCK_SIZE*x]
 //char bmap [numDataBlocks + PADDING_D] ;    // [BLOCK_SIZE*y]
-
-typedef struct {
-  InodeDiskType inodeList [24];
-  char padding[512];
-  //padding = block_size - array_size = 2048 - 64*24 = 512
-} InodeBlockArray;
