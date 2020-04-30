@@ -180,7 +180,7 @@ int mkFS(long deviceSize)
 	sBlock.magicNumber = 0x000D5500;   
 	sBlock.numInodes = MAX_iNODE_NUM;		
     sBlock.numDataBlocks = (deviceSize/BLOCK_SIZE) - 3 
-	// 3 block reserved: superblock and inodes
+	// 3 blocks reserved: superblock and inodes
 
 	// Not needed. See metadata.h
     //sBlock.numBlocksInodeMap = ; //Cuantos bloques necesito para mapear todos los nodos (todos los punteros)
