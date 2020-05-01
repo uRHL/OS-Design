@@ -11,7 +11,7 @@
  */
 
 #define T_FILE 1
-#define T_DIRECTORY 2
+#define T_LINK 2
 #define BLOCK_SIZE 2048
 
 #define bitmap_getbit(bitmap_, i_) (bitmap_[i_ >> 3] & (1 << (i_ & 0x07)))
@@ -54,12 +54,13 @@ int numDataBlocks = ;
 */
 
 typedef struct {
-    unsigned int type;              /*  T_FILE o T_DIRECTORY */
+    unsigned int type;              /*  T_FILE o T_LINK */
     char name[32];              /* name of the associated file/directory*/
     unsigned int inodeTable[5];    /* type==dir: list of files from the directory */
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
+    unsigned int pointsTo;        /*If its a link, what data block should it point to*/
     // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
     //padding not needed with the inode block array
     //char padding[1980];

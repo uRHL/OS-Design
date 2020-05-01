@@ -332,7 +332,7 @@ int unmountFS(void)
 int createFile(char *fileName)
 {	
 	// Error if the file already exists
-	if (namei(fileName) == 0) {
+	if (namei(fileName) !=-1) {
 		printf("The file with name %s already exists in the file system.\n", fileName);
 		return -1;
 	}
@@ -393,12 +393,7 @@ int removeFile(char *fileName)
 		printf("Error! i-node of file %s couldn't be freed.\n", fileName);
 		return -2;
 	}
-/*Esto funciona si sólo tenemos un bloque
-	// Free block, if error return -2
-	if (freeBlock(inodos[inode_id].FirstBlock) < 0) {
-		printf("Error! Block of file %s couldn't be freed.\n", fileName);
-		return -2;
-	}*/
+
 	//Esto elimina todos los bloques que pueda contener
 	for(int i = 0;i < (inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].numBlocks); i++){
 		if (freeBlock(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].inodeTable[i]) < 0) {
@@ -854,6 +849,8 @@ int openFileIntegrity(char *fileName)
 
 	file_List[fileDescriptor].integrity = 1;	// Opened with integrity bit = 1
 	file_List[fileDescriptor].position = 0;		// Seek pointer = 0
+	file_List[fileDescriptor].opened = 1;		// Open bit = 1
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
 
 	printf("File %s opened with integrity.\n", fileName);
 	return fileDescriptor;
@@ -914,7 +911,39 @@ int closeFileIntegrity(int fileDescriptor)
  */
 int createLn(char *fileName, char *linkName)
 {
-    return -1;
+   // Error if the link already exists
+	if (namei(linkName) != -1) {
+		printf("The link with name %s already exists in the file system.\n", linkName);
+		return -2;
+	}
+
+	// Block and i-node IDs
+	int inode_id;
+
+	// Allocate a new i-node
+	inode_id = ialloc();
+
+	// If error return -1
+	if (inode_id < 0) {
+		printf("Error! i-node of link %s couldn't be allocated.\n", linkName);
+		return -2;
+	}
+
+	//Look for first Data block of the file
+	int inodeFile=namei(fileName);
+	if (inodeFile < 0) {
+		printf("The File with name %s doesn't exist in the file system.\n", fileName);
+		return -1;
+	}
+	int fileBlock= inodosBlock[inodeFile / iNODES_PER_BLOCK].inodeList[inodeFile % iNODES_PER_BLOCK].inodeTable[0];
+
+	//Store the id of the first block in the inode
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].pointsTo= fileBlock;
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type = T_LINK;
+	strcpy(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].name, linkName);
+
+	printf("Link %s created.\n", pointsTo);
+	return 0; 
 }
 
 /*
@@ -923,5 +952,21 @@ int createLn(char *fileName, char *linkName)
  */
 int removeLn(char *linkName)
 {
-    return -2;
+    int inode_id = namei(linkName);
+
+	// Error if the file doesn't exist
+	if (inode_id < 0) {
+		printf("The link %s does not exists.\n", linkName);
+		return -1;
+	}
+	memset(&(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
+
+	// Free i-node, if error return -2
+	if (ifree(inode_id) < 0) {
+		printf("Error! i-node of file %s couldn't be freed.\n", fileName);
+		return -2;
+	}
+
+	printf("Link %s removed.\n", linkName);
+	return 0;
 }
