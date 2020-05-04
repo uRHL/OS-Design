@@ -60,7 +60,7 @@ typedef struct {
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
-    unsigned int pointsTo;        /*If its a link, what data block should it point to*/
+    unsigned int pointsTo;        /*If its a link, what inode should it point to*/
     // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
     //padding not needed with the inode block array
     //char padding[1980];

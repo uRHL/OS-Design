@@ -386,6 +386,11 @@ int removeFile(char *fileName)
 		printf("The file %s does not exists.\n", fileName);
 		return -1;
 	}
+
+	if(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type==T_LINK){
+		printf("Error! %s is a link, not a file\n", fileName);
+		return -2;
+	}
 	memset(&(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
 
 	// Free i-node, if error return -2
@@ -414,6 +419,11 @@ int openFile(char *fileName)
 {  
 	//First of all we look if the file exist, if we didn't find we return -1
 	int fileDescriptor = namei(fileName);
+
+	//User may introduce a linkName so we search for the corresponding File
+	if(inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].type==T_LINK){
+		fileDescriptor=inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].pointsTo;
+	}
 
 	// If error return -1
 	if (fileDescriptor < 0) {
@@ -929,20 +939,19 @@ int createLn(char *fileName, char *linkName)
 		return -2;
 	}
 
-	//Look for first Data block of the file
+	//Look for inode of the file
 	int inodeFile=namei(fileName);
 	if (inodeFile < 0) {
 		printf("The File with name %s doesn't exist in the file system.\n", fileName);
 		return -1;
 	}
-	int fileBlock= inodosBlock[inodeFile / iNODES_PER_BLOCK].inodeList[inodeFile % iNODES_PER_BLOCK].inodeTable[0];
-
-	//Store the id of the first block in the inode
-	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].pointsTo= fileBlock;
+	
+	//Store the id of the inode
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].pointsTo= inodeFile;
 	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type = T_LINK;
 	strcpy(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].name, linkName);
 
-	printf("Link %s created.\n", pointsTo);
+	printf("Link %s created.\n", linkName);
 	return 0; 
 }
 
@@ -959,11 +968,16 @@ int removeLn(char *linkName)
 		printf("The link %s does not exists.\n", linkName);
 		return -1;
 	}
+
+	if(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type==T_FILE){
+		printf("Error! %s is a file, not a link\n", linkName);
+		return -2;
+	}
 	memset(&(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
 
 	// Free i-node, if error return -2
 	if (ifree(inode_id) < 0) {
-		printf("Error! i-node of file %s couldn't be freed.\n", fileName);
+		printf("Error! i-node of link %s couldn't be freed.\n", linkName);
 		return -2;
 	}
 
