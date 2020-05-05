@@ -23,13 +23,7 @@ static inline void bitmap_setbit(char *bitmap_, int i_, int val_) {
 }
 
 typedef struct {    
-  unsigned int magicNumber;                 /* Supeblock magic number: 0x000D5500 */
-
-  //these are not used since the maps are selfcontained in the superblock
-  //unsigned int numBlocksInodeMap;    /* Number of blocks of the inode map*/
-  //unsigned int numBlocksBlockMap;      /* Number of blocks of the data map */   
-
-  unsigned int numInodes;                  /* Number of inodes on the device */    
+  
   unsigned int firstInode;                 /* Block number of of the first inode on the device (root inode) */    
   unsigned int numDataBlocks;               /* Number of data blocks on the device */    
   unsigned int firstDataBlock;             /* Block number of the first block*/    
@@ -45,13 +39,6 @@ typedef struct {
 
 //SuperblockType sBlocks [1] ;
 SuperblockType sBlock;
-
-/* No longer needed
-int PADDING_I = 1980;
-int PADDING_D = 992; 
-int numInodes = MAX_iNODE_NUM;
-int numDataBlocks = ;
-*/
 
 typedef struct {
     unsigned int type;              /*  T_FILE o T_LINK */
@@ -74,7 +61,7 @@ typedef struct {
   //padding = block_size - array_size = 2048 - 68*24 = 416 bytes
 } InodeBlockArray;
 
-//InodeDiskType inodos [MAX_iNODE_NUM];
+//Array to store inodes. It will have as many positions as disk blocks are required
 InodeBlockArray inodosBlock [MAX_iNODE_NUM/iNODES_PER_BLOCK];
 
 typedef struct {
@@ -86,7 +73,3 @@ typedef struct {
 } inode_x;
 
 inode_x file_List [MAX_iNODE_NUM];
-
-//No longer needed. Kept in the superblock
-//char imap [numInodes + PADDING_I] ;                 // [BLOCK_SIZE*x]
-//char bmap [numDataBlocks + PADDING_D] ;    // [BLOCK_SIZE*y]

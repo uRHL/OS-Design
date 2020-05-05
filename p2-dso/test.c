@@ -22,8 +22,8 @@
 #define ANSI_COLOR_GREEN "\x1b[32m"
 #define ANSI_COLOR_BLUE "\x1b[34m"
 
-#define N_BLOCKS 25					  // Number of blocks in the device
-#define DEV_SIZE N_BLOCKS *BLOCK_SIZE // Device size, in bytes
+#define N_BLOCKS 250					  // Number of blocks in the device
+#define DEV_SIZE N_BLOCKS * BLOCK_SIZE // Device size, in bytes
 
 int main()
 {
@@ -59,7 +59,15 @@ int main()
 	fprintf(stdout, "%s%s%s%s%s", ANSI_COLOR_BLUE, "TEST createFile ", ANSI_COLOR_GREEN, "SUCCESS\n", ANSI_COLOR_RESET);
 
 	///////
+	ret = closeFile(ret);
+	if (ret != 0)
+	{
+		fprintf(stdout, "%s%s%s%s%s", ANSI_COLOR_BLUE, "TEST closeFile ", ANSI_COLOR_RED, "FAILED\n", ANSI_COLOR_RESET);
+		return -1;
+	}
+	fprintf(stdout, "%s%s%s%s%s", ANSI_COLOR_BLUE, "TEST closeFile ", ANSI_COLOR_GREEN, "SUCCESS\n", ANSI_COLOR_RESET);
 
+	/////
 	ret = unmountFS();
 	if (ret != 0)
 	{

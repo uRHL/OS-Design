@@ -19,47 +19,220 @@
 //SuperblockType sBlock;
 
 /*
+ * @brief 	Allocates a free i-node
+ * @return 	inode if success, -1 otherwise.
+ */
+int ialloc(void)
+{
+	// Search for a free i-node
+	for (int i = 0; i < sBlock.numInodes; i++) {
+		if (sBlock.imap[i] == 0) {
+			// i-node busy right now
+			sBlock.imap[i] = 1;
+
+			// Default values for the i-node
+			//memset(&(inodos[i]), 0, sizeof(InodeDiskType)); //Using 1 inode per block
+
+			//Using inode block array
+			memset(&(inodosBlock[i / iNODES_PER_BLOCK].inodeList[i % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
+
+			// Return the i-node indentification
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+
+/*
+ * @brief 	Free an allocated i-node
+ * @return 	0 if success, -1 otherwise.
+ */
+int ifree(int inode_id)
+{
+	// Check the inode_id vality, return -1 if not valid
+	if (inode_id > sBlock.numInodes) {
+		return -1;
+	}
+
+	// Free i-node
+	sBlock.imap[inode_id] = 0;
+
+	return 0; 
+}
+
+/*
+ * @brief 	Allocates a free block
+ * @return 	block id if success, -1 otherwise.
+ */
+int alloc(void)
+{
+	char b[BLOCK_SIZE];
+	for (int i = 0; i < sBlock.numDataBlocks; i++) {
+		if (sBlock.datablockmap[i] == 0) {
+			// Busy block right now
+			sBlock.datablockmap[i] = 1;
+
+			// Default values for the block
+			memset(b, 0, BLOCK_SIZE);
+			bwrite(DEVICE_IMAGE, i, b);
+
+			// Return the block id
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+/*
+ * @brief 	Free an allocated block
+ * @return 	0 if success, -1 otherwise.
+ */
+int freeBlock(int block_id)
+{
+	// Check the block_id vality, return -1 if not valid
+	if (block_id > sBlock.numDataBlocks) {
+		return -1;
+	}
+
+	// Free block
+	sBlock.datablockmap[block_id] = 0;
+	//Comprobar que pasa con los datos que había en esos bloques
+	return 0;
+}
+
+
+/*
+ * @brief 	Searchs the i-node with name fname
+ * @return 	i-node if success, -1 otherwise.
+ */
+int namei(char *fname)
+{
+	// If i-node with name equal to fname, return i-node
+	for (int i = 0; i < sBlock.numInodes; i++){
+ 		if (strcmp(inodosBlock[i / iNODES_PER_BLOCK].inodeList[i % iNODES_PER_BLOCK].name, fname) == 0) {
+ 			return i;
+		}
+ 	}
+	
+	return -1;
+}
+/*
+ * @brief 	Allocate blocks when writing more than 1
+ * @return 	block id if success, -1 otherwise.
+ */
+int allocateInWrite(int fileDescriptor){	
+	int actualBlock = file_List[fileDescriptor].actualBlock;
+	int newBlock_id = 0;
+	if (actualBlock < 4){ //If it's 4 we cant add more blocks
+		newBlock_id = alloc();
+		if (newBlock_id < 0){
+			return -1; //Problem allocating the block
+		}
+		actualBlock++;
+		
+		/*
+		inodos[fileDescriptor].inodeTable[actualBlock]=newBlock_id;
+		inodos[fileDescriptor].numBlocks++;
+		*/
+		inodosBlock[fileDescriptor/iNODES_PER_BLOCK].inodeList[fileDescriptor%iNODES_PER_BLOCK].inodeTable[actualBlock] = newBlock_id;
+		inodosBlock[fileDescriptor/iNODES_PER_BLOCK].inodeList[fileDescriptor%iNODES_PER_BLOCK].numBlocks++;
+		file_List[fileDescriptor].actualBlock = actualBlock;
+	}
+	return newBlock_id;
+}
+
+/*
+ * @brief 	Search block with position equal to offset of i-node inodo_id
+ * @return 	block id if success, -1 otherwise.
+ */
+/*int bmap(int inodo_id, int offset)
+{
+	int b[BLOCK_SIZE / 4];
+
+	// If offset is lower than the block size, return the direct block
+	if (offset < BLOCK_SIZE) {
+		return inodos[inodo_id].inodeTable[0];
+	}
+	
+	// Otherwise, it means there are indirect blocks. Therefore, return indirect block
+	if (offset < BLOCK_SIZE * BLOCK_SIZE / 4) {
+		if (bread(DEVICE_IMAGE, inodos[inodo_id].indirectBlock, b) < 0) {
+			printf("Error! Block starting at position %d of i-node %d couldn't be read.\n", offset, inodo_id);
+			return -1;
+		}
+
+		offset = (offset – BLOCK_SIZE) / BLOCK_SIZE;
+
+		return b[offset];
+	}
+
+	// If error return -1
+	return -1; 
+}*/
+
+/*
  * @brief 	Generates the proper file system structure in a storage device, as designed by the student.
  * @return 	0 if success, -1 otherwise.
  */
 int mkFS(long deviceSize)
 {
 	if(deviceSize < MIN_DISK_SIZE || deviceSize > MAX_DISK_SIZE){
-		printf("Disk size should be between 460KB and 600KB\n");
+		printf("Error! Disk size should be between 460KB and 600KB.\n");
 		return -1;
 	}
-	 // setup with default values the superblock, maps, and i-nodes	 
-	    sBlock.magicNumber = 0x000D5500;   
-		sBlock.numInodes = MAX_iNODE_NUM;		
-	    sBlock.numDataBlocks = MAX_NUM_DATABLOCKS;
 
-		//Not needed. See metadata.h
-	    //sBlock.numBlocksInodeMap = ; //Cuantos bloques necesito para mapear todos los nodos (todos los punteros)
-	    //sBlock.numBlocksBlockMap = 48; //Cuantos bloques necesito para mapear todos los data blocks (todos los punteros)
+	// Setup with default values the superblock, maps, and i-nodes	 
+	sBlock.magicNumber = 0x000D5500;   
+	sBlock.numInodes = MAX_iNODE_NUM;		
+    sBlock.numDataBlocks = (deviceSize/BLOCK_SIZE) - 3;
+	// 3 blocks reserved: superblock and inodes
 
-	    sBlock.firstInode = 1; //Superblock ocupies 1
+	// Not needed. See metadata.h
+    //sBlock.numBlocksInodeMap = ; //Cuantos bloques necesito para mapear todos los nodos (todos los punteros)
+    //sBlock.numBlocksBlockMap = 48; //Cuantos bloques necesito para mapear todos los data blocks (todos los punteros)
+
+	sBlock.firstInode = 1; //Superblock ocupies 1
 		
-		//49 = num Inode blocks + num superblock
-		sBlock.firstDataBlock = 49; //superblock in 0 plus 48 inodes
-	    sBlock.deviceSize = deviceSize;
+	// num Inode blocks + num superblock = 3
+	sBlock.firstDataBlock = 3; //superblock in 0 plus 2 inode blocks
+	sBlock.deviceSize = deviceSize;
 
-	    for (int i=0; i<sBlock.numInodes; i++){           
-	    	sBlock.imap[i] = 0; // free
-	    	}
-	    for (int i =0; i<MAX_NUM_DATABLOCKS; i++){
-			sBlock.datablockmap[i] = 0; // free 
-	    }
-	    for (int i=0; i<sBlock.numInodes; i++){
-	    	memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
-	    } 
-		syncronizeWithDisk();
+	// Free i-map
+	for (int i = 0; i < sBlock.numInodes; i++){           
+	    sBlock.imap[i] = 0;
+	}
 
-		/*//we also prepare the file array
-		for(int i=0;i<sBlock.numInodes;i++){
-			file_List[i].position=0;
-			file_List[i].opened=0;
-		}
+	// Free block map
+	for (int i = 0; i < MAX_NUM_DATABLOCKS; i++){
+		if (i < sBlock.numDataBlocks) 
+			sBlock.datablockmap[i] = 0;
+		else{
+			//Marking further blocks as invalid since they exceed the actual number of data blocks for the given disk
+			sBlock.datablockmap[i] = -1;
+		} 
+	}
+
+	for (int i = 0; i < sBlock.numInodes; i++){
+	    //memset(&(inodos[i]), 0, sizeof(InodeDiskType) );
+		memset(&(inodosBlock[i/iNODES_PER_BLOCK].inodeList[i%iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
+	} 
+
+	// Synchronize disk
+	if (syncronizeWithDisk() < 0) {
+		printf("Error! Couldn't synchronize with disk.\n");
+		return -1;
+	}
+
+	/*// We also prepare the file array
+	for(int i=0;i<sBlock.numInodes;i++){
+		file_List[i].position=0;
+		file_List[i].opened=0;
+	}
 */
+	printf("New file system made.\n");
 	return 0;
 }
 
@@ -69,14 +242,29 @@ int mkFS(long deviceSize)
  */
 int syncronizeWithDisk()
 {
-	// To write block 0 from sBlock into disk    
-	bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock) ); 
-	// To write the i-nodes to disk    
-	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
-		bwrite(DEVICE_IMAGE, 1+i, ((char *)inodos + i*BLOCK_SIZE)); //WE start writing in block 1 because all the previous information is stored in the superblock
-	} 
-	return 0; 
+	// Write block sBlock into disk, if error return -1
+	if (bwrite(DEVICE_IMAGE, 0, (char *)&(sBlock)) < 0) {
+		printf("Error! Cannot write block 0 from sBlock into disk.\n");
+		return -1;
+	}
 
+	// Write the i-nodes to disk, if error return -1
+	// We start writing in block 1 because all the previous information is stored in the superblock
+	/*
+	for (int i = 0; i < (sBlock.numInodes * sizeof(InodeDiskType) / BLOCK_SIZE); i++){
+		if (bwrite(DEVICE_IMAGE, 1 + i, ((char *)inodos + i * BLOCK_SIZE)) < 0) {
+			printf("Error! Cannot write block %d from sBlock into disk.\n", i);
+			return -1;
+		}
+	}*/
+	for (int i = 0; i < (sBlock.numInodes / iNODES_PER_BLOCK); i++){
+		if (bwrite(DEVICE_IMAGE, 1 + i, (char *)&inodosBlock[i]) < 0) {
+			printf("Error! Cannot write block %d from iNodeBlock into disk.\n", i);
+			return -1;
+		}
+	}
+
+	return 0;
 }
 
 
@@ -86,13 +274,31 @@ int syncronizeWithDisk()
  */
 int mountFS(void)
 {
-	// To write block 0 from sBlock into disk    
-	bread(DEVICE_IMAGE, 0, (char *)&(sBlock) );           
-	// To write the i-nodes to disk
-	for (int i=0; i<(sBlock.numInodes*sizeof(InodeDiskType)/BLOCK_SIZE); i++){
-		bread(DEVICE_IMAGE, i+1, ((char *)inodos + i*BLOCK_SIZE));
-	} 
-    return 1;
+	// Write block 0 from sBlock into disk    
+	if (bread(DEVICE_IMAGE, 0, (char *)&(sBlock)) < 0) {
+		printf("Error! Cannot write block 0 from disk into sBlock.\n");
+		return -1;
+	}
+
+	/* version using 1 inode per block
+	for (int i = 0; i < (sBlock.numInodes * sizeof(InodeDiskType) / BLOCK_SIZE); i++){
+		if (bread(DEVICE_IMAGE, i + 1, ((char *)inodos + i * BLOCK_SIZE))) {
+			printf("Error! Cannot write block %d from disk into sBlock.\n", i);
+			return -1;
+		}
+	}*/
+
+	// Write i-nodes to disk
+	//Version using inode block array
+	for (int i = 0; i < (sBlock.numInodes / iNODES_PER_BLOCK); i++){
+		if (bread(DEVICE_IMAGE, 1 + i, (char *)&inodosBlock[i]) < 0) {
+			printf("Error! Cannot write block %d from sBlock into disk.\n", i);
+			return -1;
+		}
+	}
+
+	printf("File system mounted.\n");
+    return 0;
 }
 
 /*
@@ -101,13 +307,21 @@ int mountFS(void)
  */
 int unmountFS(void)
 {
-	for(int i=0;i<MAX_iNODE_NUM;i++){
-		if (file_List[i].opened==1){
+	// Check if opened files
+	for (int i = 0; i < MAX_iNODE_NUM; i++) {
+		if (file_List[i].opened == 1){
 			printf("There are files that haven't been closed\n");
 			return -1;
 		}
 	}
-	syncronizeWithDisk();
+
+	// Synchronize disk
+	if (syncronizeWithDisk() < 0) {
+		printf("Error! Couldn't synchronize disk.\n");
+		return -1;
+	}
+
+	printf("File system unmounted.\n");
 	return 0;
 }
 
@@ -116,8 +330,47 @@ int unmountFS(void)
  * @return	0 if success, -1 if the file already exists, -2 in case of error.
  */
 int createFile(char *fileName)
-{
-	return -2;
+{	
+	// Error if the file already exists
+	if (namei(fileName) !=-1) {
+		printf("The file with name %s already exists in the file system.\n", fileName);
+		return -1;
+	}
+
+	// Block and i-node IDs
+	int block_id, inode_id;
+
+	// Allocate a new i-node
+	inode_id = ialloc();
+
+	// If error return -1
+	if (inode_id < 0) {
+		printf("Error! i-node of file %s couldn't be allocated.\n", fileName);
+		return -2;
+	}
+
+	// Allocate a new block
+	block_id = alloc();
+
+	// If error free i-node and return -2
+	if (block_id < 0) {
+		printf("Error! Block of file %s couldn't be allocated.\n", fileName);
+		ifree(inode_id);
+		return -2;
+	}
+
+	// Set file values
+	//inodos[i] = inodosBlock[i / iNODES_PER_BLOCK].inodeList[i % iNODES_PER_BLOCK]
+	
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type = T_FILE ;
+	strcpy(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].name, fileName);
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].numBlocks = 1 ;
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].inodeTable[0] = block_id;
+	file_List[inode_id].position = 0;
+	file_List[inode_id].opened = 1;
+
+	printf("File %s created.\n", fileName);
+	return 0; 
 }
 
 /*
@@ -126,7 +379,36 @@ int createFile(char *fileName)
  */
 int removeFile(char *fileName)
 {
-	return -2;
+	int inode_id = namei(fileName);
+
+	// Error if the file doesn't exist
+	if (inode_id < 0) {
+		printf("The file %s does not exists.\n", fileName);
+		return -1;
+	}
+
+	if(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type==T_LINK){
+		printf("Error! %s is a link, not a file\n", fileName);
+		return -2;
+	}
+	memset(&(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
+
+	// Free i-node, if error return -2
+	if (ifree(inode_id) < 0) {
+		printf("Error! i-node of file %s couldn't be freed.\n", fileName);
+		return -2;
+	}
+
+	//Esto elimina todos los bloques que pueda contener
+	for(int i = 0;i < (inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].numBlocks); i++){
+		if (freeBlock(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].inodeTable[i]) < 0) {
+		printf("Error! Block of file %s couldn't be freed.\n", fileName);
+		return -2;
+		}
+	}
+
+	printf("File %s removed.\n", fileName);
+	return 0;
 }
 
 /*
@@ -134,22 +416,39 @@ int removeFile(char *fileName)
  * @return	The file descriptor if possible, -1 if file does not exist, -2 in case of error..
  */
 int openFile(char *fileName)
-{
-	int inode_id=-1;   
-	//First of all we look if the file exist 
-	for (int i=0; i<sBlock.numInodes; i++){
-		if (! strcmp(inodos[i].name, fileName)){ //This means strcmp returned 0 so they are equal
-			inode_id= i;
-		}
-	}    
-	//If we didn't find we return -1
-	if (inode_id < 0){
-		return inode_id ;
-	}           
+{  
+	//First of all we look if the file exist, if we didn't find we return -1
+	int fileDescriptor = namei(fileName);
 
-	file_List[inode_id].position = 0;    
-	file_List[inode_id].opened   = 1;    
-	return inode_id; 
+	//User may introduce a linkName so we search for the corresponding File
+	if(inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].type==T_LINK){
+		fileDescriptor=inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].pointsTo;
+	}
+
+	// If error return -1
+	if (fileDescriptor < 0) {
+		printf("Error! File %s doesn't exist.\n", fileName);
+		return -1 ;
+	}
+
+	// If file is already opened return -2
+	if (file_List[fileDescriptor].opened == 1) {
+		printf("Error! File with name %s is already opened.\n", fileName);
+		return -2;
+	}
+    
+	// Error if file has integrity
+	if (file_List[fileDescriptor].crc32_value != 0) {
+		printf("Error! File with name %s cannot be opened without integrity.\n", fileName);
+		return -2;
+	}
+
+	file_List[fileDescriptor].position = 0;	// Seek position = 0
+	file_List[fileDescriptor].opened = 1;		// Open bit = 1
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+
+	printf("File %s opened.\n", fileName);
+	return fileDescriptor; 
 }
 
 /*
@@ -158,17 +457,34 @@ int openFile(char *fileName)
  */
 int closeFile(int fileDescriptor)
 {
-
 	if (fileDescriptor < 0){
+		printf("Error! Wrong file descriptor.\n");
 		return -1;
 	}
+
 	//We look in the inode map if that file has been created. 
 	if (!bitmap_getbit(sBlock.imap, fileDescriptor)){
-		printf("There is no file with that id\n");
+		printf("Error! There is no file with such file descriptor.\n");
 		return -1;
 	}
-	file_List[fileDescriptor].position=0;
-	file_List[fileDescriptor].opened=0;
+
+	// If file wasn't opened return -1
+	if (file_List[fileDescriptor].opened == 0) {
+		printf("Error! File with file descriptor %d wasn't opened.\n", fileDescriptor);
+		return -1;
+	}
+
+	// If file was opened with integrity return -1
+	if (file_List[fileDescriptor].integrity == 1) {
+		printf("Error! File with file descriptor %d wasn't opened without integrity.\n", fileDescriptor);
+		return -1;
+	}
+
+	file_List[fileDescriptor].position = 0;		// Seek position = 0
+	file_List[fileDescriptor].opened = 0;		// Open bit = 0
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+
+	printf("File with file descriptor %d closed.\n", fileDescriptor);
 	return 0;
 }
 
@@ -178,7 +494,104 @@ int closeFile(int fileDescriptor)
  */
 int readFile(int fileDescriptor, void *buffer, int numBytes)
 {
-	return -1;
+	char b[BLOCK_SIZE];
+	int block_id;
+
+	// If error return -1
+	if (numBytes <= 0) {
+		printf("Error! File with id %d couldn't be read.\n", fileDescriptor);
+		return -1;
+	}
+
+	// If file position plus number of bytes to be read is greater that the file size,
+	// the number of bytes to be read is resized to what's left of the file
+
+	/* Version using 1 inode per block
+	if (file_List[fileDescriptor].position + numBytes > inodos[fileDescriptor].size) {
+		numBytes = inodos[fileDescriptor].size - file_List[fileDescriptor].position;
+	}*/
+
+	//VErsion using inode block array
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	if (file_List[fileDescriptor].position + numBytes > inodeSize) {
+		numBytes = inodeSize - file_List[fileDescriptor].position;
+	}
+	int bytesRead= numBytes;//Lo usaremos al final
+
+	//block_id = bmap(fileDescriptor, file_List[fileDescriptor].position);
+
+	//Parte 1, terminar de leer el bloque actal
+	int cuantoQuedaDeBloque =file_List[fileDescriptor].position % BLOCK_SIZE;
+	block_id = file_List[fileDescriptor].actualBlock;
+
+	if (block_id < 0) {
+		printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
+		return -1;
+	}
+
+	if (bread(DEVICE_IMAGE, block_id, b) < 0) {
+		printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+		return -1;
+	}
+	// Save content to buffer
+	memmove(buffer, b + (file_List[fileDescriptor].position % BLOCK_SIZE), cuantoQuedaDeBloque); //Así cogemos la posición en ese bloque
+	// Increase file position
+	file_List[fileDescriptor].position += cuantoQuedaDeBloque;
+	int actualBlock= file_List[fileDescriptor].actualBlock;
+	file_List[fileDescriptor].actualBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock + 1];//Comprobar que esto funciones realmente así
+	numBytes -= cuantoQuedaDeBloque;
+	//Fin parte 1
+
+	//Parte 2: Hacer loop con los que podamos hacer bloques enteros
+	int VueltasAlLoop = numBytes/BLOCK_SIZE; //Al truncar, obtendremos los bloques enteros que leemos
+	for(int i = 0; i < VueltasAlLoop; i++){
+		block_id = file_List[fileDescriptor].actualBlock;
+
+		if (block_id < 0) {
+			printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
+			return -1;
+		}
+		//Comprobar si b se trunca y podemos hacerlo directamente asi o hay que reiniciarlo
+		if (bread(DEVICE_IMAGE, block_id, b) < 0) {
+			printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+			return -1;
+		}
+		// Save content to buffer
+		memmove(buffer+cuantoQuedaDeBloque+i*BLOCK_SIZE, b + (file_List[fileDescriptor].position % BLOCK_SIZE), BLOCK_SIZE); //Esta vez la posición debería ser 0 durante el calculo, porque empezamos bloque
+		// Increase file position
+		file_List[fileDescriptor].position += BLOCK_SIZE;
+		actualBlock= file_List[fileDescriptor].actualBlock;
+
+		//Version using 1 inode per block
+		//file_List[fileDescriptor].actualBlock= inodos[fileDescriptor].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+
+		//Version using inode block array
+		file_List[fileDescriptor].actualBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+		numBytes -= BLOCK_SIZE;
+	}
+	//Fin parte 2
+
+	//Parte 3: Leemos lo que quede
+	if(numBytes > 0){
+		block_id = file_List[fileDescriptor].actualBlock;
+
+		if (block_id < 0) {
+			printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
+			return -1;
+		}
+
+		if (bread(DEVICE_IMAGE, block_id, b) < 0) {
+			printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+			return -1;
+		}
+		// Save content to buffer
+		memmove(buffer+cuantoQuedaDeBloque+VueltasAlLoop*BLOCK_SIZE, b+ (file_List[fileDescriptor].position % BLOCK_SIZE), numBytes);
+		// Increase file position
+		file_List[fileDescriptor].position += numBytes;
+		//En esta version no superamos el bloque actual por lo que no lo actualizamos
+	}
+	//Fin Parte 3
+	return bytesRead;
 }
 
 /*
@@ -187,16 +600,134 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
  */
 int writeFile(int fileDescriptor, void *buffer, int numBytes)
 {
-	return -1;
+	char b[BLOCK_SIZE];
+	int block_id;
+
+	// If error return -1
+	if (numBytes <= 0) {
+		printf("Error! File with id %d couldn't be written.\n", fileDescriptor);
+		return -1;
+	}
+	// If file position plus number of bytes to be written is greater that the file size,
+	// the number of bytes to be written is resized to what's left of the file
+	if (file_List[fileDescriptor].position + numBytes > 10240) {
+		numBytes = 10240 - file_List[fileDescriptor].position;
+	}
+	int bytesWritten=numBytes;
+	//block_id = bmap(fd, file_List[fileDescriptor].position);
+
+
+    //Parte 1
+	int cuantoQuedaDeBloque =file_List[fileDescriptor].position % BLOCK_SIZE;
+	block_id = file_List[fileDescriptor].actualBlock;
+	
+	if (bread(DEVICE_IMAGE, block_id, b) < 0) {
+		printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+		return -1;
+	}
+	// Write content to file
+	memmove(b + file_List[fileDescriptor].position%BLOCK_SIZE, buffer, cuantoQuedaDeBloque);
+	bwrite(DEVICE_IMAGE, block_id, b);
+	// Increase file position
+	file_List[fileDescriptor].position += cuantoQuedaDeBloque;
+	// Increase file size
+	//inodos[fileDescriptor].size += cuantoQuedaDeBloque;
+	inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size += cuantoQuedaDeBloque;
+	numBytes -=cuantoQuedaDeBloque;
+
+	//Now we need to allocate a new data block
+	int newBlock_id=allocateInWrite(fileDescriptor);
+	if(newBlock_id<0){
+		return -1;
+	}
+	//End part 1
+
+	//Loop part 2
+	int VueltasAlLoop =numBytes/BLOCK_SIZE; //Al truncar, obtendremos los bloques enteros que leemos
+	for(int i=0; i<VueltasAlLoop;i++){
+		if (bread(DEVICE_IMAGE, newBlock_id, b) < 0) {
+			printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+			return -1;
+		}
+	// Write content to file
+	memmove(b + file_List[fileDescriptor].position%BLOCK_SIZE, buffer+cuantoQuedaDeBloque+i*BLOCK_SIZE, BLOCK_SIZE);
+	bwrite(DEVICE_IMAGE, block_id, b);
+	// Increase file position
+	file_List[fileDescriptor].position += BLOCK_SIZE;
+	// Increase file size
+	//inodos[fileDescriptor].size += BLOCK_SIZE;
+	inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size += BLOCK_SIZE;
+	numBytes -=BLOCK_SIZE;
+	newBlock_id=allocateInWrite(fileDescriptor);
+		if(newBlock_id<0){
+			return -1;
+		}
+	}
+	//End part 2
+
+	//Part 3:The rest
+	if(numBytes>0){
+		if (bread(DEVICE_IMAGE, block_id, b) < 0) {
+			printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
+			return -1;
+		}	
+	memmove(b + file_List[fileDescriptor].position%BLOCK_SIZE, buffer+cuantoQuedaDeBloque+VueltasAlLoop*BLOCK_SIZE, numBytes);
+	bwrite(DEVICE_IMAGE, block_id, b);	
+	file_List[fileDescriptor].position += numBytes;
+	// Increase file size
+	//inodos[fileDescriptor].size += numBytes;
+	inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size += numBytes;
+	}
+	return bytesWritten; 
 }
 
 /*
  * @brief	Modifies the position of the seek pointer of a file.
- * @return	0 if succes, -1 otherwise.
+ * @return	0 if success, -1 otherwise.
  */
 int lseekFile(int fileDescriptor, long offset, int whence)
-{
-	return -1;
+{	
+	// If error return -1
+	if (fileDescriptor < 0) {
+		printf("Error! Wrong file descriptor.\n");
+		return -1;
+	}
+
+	// Change file position to the beginning
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	if (whence == FS_SEEK_BEGIN) {
+		file_List[fileDescriptor].position = 0;
+		file_List[fileDescriptor].actualBlock=0;
+	}
+
+	// Change file position to its current position plus an offset	
+
+	/* Version using 1 inode per block
+	else if (whence == FS_SEEK_CUR && file_List[fileDescriptor].position + offset <= inodos[fileDescriptor].size) {
+		file_List[fileDescriptor].position += offset;
+		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
+	}*/
+
+	//Version using inode block array
+	else if (whence == FS_SEEK_CUR && file_List[fileDescriptor].position + offset <= inodeSize) {
+		file_List[fileDescriptor].position += offset;
+		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
+	}
+
+	// Change file position to the end
+	else if (whence == FS_SEEK_END) {
+		//file_List[fileDescriptor].position = inodos[fileDescriptor].size;
+		file_List[fileDescriptor].position = inodeSize;
+		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
+	}
+
+	// If error return -1
+	else {
+		printf("Error! Incorrect whence value.\n");
+		return -1;
+	}
+
+	return 0;
 }
 
 /*
@@ -205,8 +736,52 @@ int lseekFile(int fileDescriptor, long offset, int whence)
  */
 
 int checkFile (char * fileName)
-{
-    return -2;
+{	
+	// Open file
+	int fileDescriptor = openFile(fileName);
+
+	// Error if the file doesn't exist
+	if (fileDescriptor == -1) {
+		printf("Error! The file with name %s does not exist in the file system.\n", fileName);
+		closeFile(fileDescriptor);
+		return -2;
+	}
+
+	// If error opening the file return -3
+	else if (fileDescriptor == -2) {
+		printf("Error! The file with name %s couldn't be opened.\n", fileName);
+		closeFile(fileDescriptor);
+		return -3;
+	}
+
+	// If file without integrity return -4
+	else if (file_List[fileDescriptor].crc32_value == 0) {
+		printf("Error! The file with name %s doesn't have integrity value.\n", fileName);
+		closeFile(fileDescriptor);
+		return -4;
+	}
+
+	// Buffer to save file content and to compute CRC-32 value
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	char buffer[inodeSize];
+
+	// Read file
+	readFile(fileDescriptor, &buffer, strlen(buffer));
+
+	// Compute CRC-32 value
+	uint32_t val = CRC32((const unsigned char*)&(buffer), strlen(buffer));
+
+	// Check if corrupted file
+	if (val != file_List[fileDescriptor].crc32_value) {
+		printf("Warning! The file with name %s is corrupted.\n", fileName);
+		closeFile(fileDescriptor);
+		return -1;
+	}
+
+	// Close file
+	closeFile(fileDescriptor);
+
+    return 0;
 }
 
 /*
@@ -215,8 +790,45 @@ int checkFile (char * fileName)
  */
 
 int includeIntegrity (char * fileName)
-{
-    return -2;
+{	
+	// Open file
+	int fileDescriptor = openFile(fileName);
+
+	// Error if the file doesn't exist
+	if (fileDescriptor == -1) {
+		printf("Error! The file with name %s does not exist in the file system.\n", fileName);
+		closeFile(fileDescriptor);
+		return -1;
+	}
+
+	// If error opening the file return -2
+	else if (fileDescriptor == -2) {
+		printf("Error! The file with name %s couldn't be opened.\n", fileName);
+		closeFile(fileDescriptor);
+		return -2;
+	}
+
+	// Error if file has already integrity
+	if (file_List[fileDescriptor].crc32_value != 0) {
+		printf("Error! The file with name %s has already integrity.\n", fileName);
+		closeFile(fileDescriptor);
+		return -2;
+	}
+
+	// Buffer to save file content and to compute CRC-32 value
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	char buffer[inodeSize];
+
+	// Read file
+	readFile(fileDescriptor, &buffer, strlen(buffer));
+
+	// Add integrity
+	file_List[fileDescriptor].crc32_value = CRC32((const unsigned char*)&buffer, strlen(buffer));
+
+	// Close file
+	closeFile(fileDescriptor);
+
+    return 0;
 }
 
 /*
@@ -225,8 +837,33 @@ int includeIntegrity (char * fileName)
  */
 int openFileIntegrity(char *fileName)
 {
+	// Check file integrity
+	if (checkFile(fileName) == -2) {
+		return -1;
+	}
 
-    return -2;
+	else if (checkFile(fileName) == -1) {
+		return -2;
+	}
+
+	else if (checkFile(fileName) == -3) {
+		return -3;
+	}
+
+	else if (checkFile(fileName) == -4) {
+		return -3;
+	}
+
+	// Open file
+	int fileDescriptor = openFile(fileName);
+
+	file_List[fileDescriptor].integrity = 1;	// Opened with integrity bit = 1
+	file_List[fileDescriptor].position = 0;		// Seek pointer = 0
+	file_List[fileDescriptor].opened = 1;		// Open bit = 1
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+
+	printf("File %s opened with integrity.\n", fileName);
+	return fileDescriptor;
 }
 
 /*
@@ -235,7 +872,47 @@ int openFileIntegrity(char *fileName)
  */
 int closeFileIntegrity(int fileDescriptor)
 {
-    return -1;
+    if (fileDescriptor < 0){
+		printf("Error! Wrong file descriptor.\n");
+		return -1;
+	}
+
+	// We look in the inode map if that file has been created. 
+	if (!bitmap_getbit(sBlock.imap, fileDescriptor)){
+		printf("Error! There is no file with such file descriptor.\n");
+		return -1;
+	}
+
+	// If file wasn't opened return -1
+	if (file_List[fileDescriptor].opened == 0) {
+		printf("Error! File with file descriptor %d wasn't opened.\n", fileDescriptor);
+		return -1;
+	}
+
+	// If file wasn't opened with integrity check return -1
+	if (file_List[fileDescriptor].integrity == 0) {
+		printf("Error! File with file descriptor %d wasn't opened with integrity.\n", fileDescriptor);
+		return -1;
+	}
+
+	// Buffer to save file content and to compute CRC-32 value
+	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
+	char buffer[inodeSize];
+
+	// Read file
+	readFile(fileDescriptor, &buffer, strlen(buffer));
+
+	// Add integrity
+	file_List[fileDescriptor].crc32_value = CRC32((const unsigned char*)&buffer, strlen(buffer));
+
+	// Close file
+	file_List[fileDescriptor].position = 0;		// Seek position = 0
+	file_List[fileDescriptor].opened = 0;		// Open bit = 0
+	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].integrity = 0;	// Opened with integrity bit = 0
+
+	printf("File with file descriptor %d closed.\n", fileDescriptor);
+	return 0;
 }
 
 /*
@@ -244,7 +921,38 @@ int closeFileIntegrity(int fileDescriptor)
  */
 int createLn(char *fileName, char *linkName)
 {
-    return -1;
+   // Error if the link already exists
+	if (namei(linkName) != -1) {
+		printf("The link with name %s already exists in the file system.\n", linkName);
+		return -2;
+	}
+
+	// Block and i-node IDs
+	int inode_id;
+
+	// Allocate a new i-node
+	inode_id = ialloc();
+
+	// If error return -1
+	if (inode_id < 0) {
+		printf("Error! i-node of link %s couldn't be allocated.\n", linkName);
+		return -2;
+	}
+
+	//Look for inode of the file
+	int inodeFile=namei(fileName);
+	if (inodeFile < 0) {
+		printf("The File with name %s doesn't exist in the file system.\n", fileName);
+		return -1;
+	}
+	
+	//Store the id of the inode
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].pointsTo= inodeFile;
+	inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type = T_LINK;
+	strcpy(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].name, linkName);
+
+	printf("Link %s created.\n", linkName);
+	return 0; 
 }
 
 /*
@@ -253,5 +961,26 @@ int createLn(char *fileName, char *linkName)
  */
 int removeLn(char *linkName)
 {
-    return -2;
+    int inode_id = namei(linkName);
+
+	// Error if the file doesn't exist
+	if (inode_id < 0) {
+		printf("The link %s does not exists.\n", linkName);
+		return -1;
+	}
+
+	if(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK].type==T_FILE){
+		printf("Error! %s is a file, not a link\n", linkName);
+		return -2;
+	}
+	memset(&(inodosBlock[inode_id / iNODES_PER_BLOCK].inodeList[inode_id % iNODES_PER_BLOCK]), 0, sizeof(InodeDiskType));
+
+	// Free i-node, if error return -2
+	if (ifree(inode_id) < 0) {
+		printf("Error! i-node of link %s couldn't be freed.\n", linkName);
+		return -2;
+	}
+
+	printf("Link %s removed.\n", linkName);
+	return 0;
 }
