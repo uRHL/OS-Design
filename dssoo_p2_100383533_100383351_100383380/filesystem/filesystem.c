@@ -184,6 +184,16 @@ int mkFS(long deviceSize)
 		return -1;
 	}
 
+	/*If the maximum file size is not a multiple of the block size a decision must be made:
+	truncate the size of the file, or extend its size.
+	Given that this values are defined by the programmer, this conditional is created as a security measure
+	so that the file system will not be created if this two constants are not well defined.
+	*/
+	if(MAX_FILE_SIZE % BLOCK_SIZE){
+		printf("Error! Max_FILE_SIZE is not a multiple of BLOCK_SIZE.\n");
+		return -1;
+	}
+
 	// Setup with default values the superblock, maps, and i-nodes	 
     sBlock.numDataBlocks = (deviceSize/BLOCK_SIZE) - 3;
 	// 3 blocks reserved: superblock and inodes
