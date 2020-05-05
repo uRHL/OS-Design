@@ -37,13 +37,12 @@ typedef struct {
   //Padding = BLOCK_SIZE - superblock size = 2048 - (6*4 + 48+ 297) = 1679
 } SuperblockType;
 
-//SuperblockType sBlocks [1] ;
 SuperblockType sBlock;
 
 typedef struct {
     unsigned int type;              /*  T_FILE o T_LINK */
-    char name[32];              /* name of the associated file/directory*/
-    unsigned int inodeTable[5];    /* type==dir: list of files from the directory */
+    char name[MAX_NAME_LENGTH];              /* name of the associated file/directory*/
+    unsigned int inodeTable[MAX_FILE_SIZE / BLOCK_SIZE];    /* type==dir: list of files from the directory */
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
@@ -56,7 +55,7 @@ typedef struct {
 } InodeDiskType;
 
 typedef struct {
-  InodeDiskType inodeList [24];
+  InodeDiskType inodeList [iNODES_PER_BLOCK];
   char padding[416];
   //padding = block_size - array_size = 2048 - 68*24 = 416 bytes
 } InodeBlockArray;
@@ -67,9 +66,9 @@ InodeBlockArray inodosBlock [MAX_iNODE_NUM/iNODES_PER_BLOCK];
 typedef struct {
 	int position;     // Seek position
 	int opened;       // 0 if closed, 1 if opened
-  int actualBlock;   // Current block
-  int integrity;    // 0 if opened without integrity, 1 otherwise
+  int currentBlock;   // Current block
   int crc32_value;  // CRC-32 integrity value
+  int integrity;    // 0 if opened without integrity, 1 otherwise
 } inode_x;
 
 inode_x file_List [MAX_iNODE_NUM];

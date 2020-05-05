@@ -124,7 +124,7 @@ int namei(char *fname)
  * @return 	block id if success, -1 otherwise.
  */
 int allocateInWrite(int fileDescriptor){	
-	int actualBlock = file_List[fileDescriptor].actualBlock;
+	int actualBlock = file_List[fileDescriptor].currentBlock;
 	int newBlock_id = 0;
 	if (actualBlock < 4){ //If it's 4 we cant add more blocks
 		newBlock_id = alloc();
@@ -139,7 +139,7 @@ int allocateInWrite(int fileDescriptor){
 		*/
 		inodosBlock[fileDescriptor/iNODES_PER_BLOCK].inodeList[fileDescriptor%iNODES_PER_BLOCK].inodeTable[actualBlock] = newBlock_id;
 		inodosBlock[fileDescriptor/iNODES_PER_BLOCK].inodeList[fileDescriptor%iNODES_PER_BLOCK].numBlocks++;
-		file_List[fileDescriptor].actualBlock = actualBlock;
+		file_List[fileDescriptor].currentBlock = actualBlock;
 	}
 	return newBlock_id;
 }
@@ -420,7 +420,7 @@ int openFile(char *fileName)
 
 	file_List[fileDescriptor].position = 0;	// Seek position = 0
 	file_List[fileDescriptor].opened = 1;		// Open bit = 1
-	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].currentBlock = 0;	// We are in data Block  0
 
 	printf("File %s opened.\n", fileName);
 	return fileDescriptor; 
@@ -457,7 +457,7 @@ int closeFile(int fileDescriptor)
 
 	file_List[fileDescriptor].position = 0;		// Seek position = 0
 	file_List[fileDescriptor].opened = 0;		// Open bit = 0
-	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].currentBlock = 0;	// We are in data Block  0
 
 	printf("File with file descriptor %d closed.\n", fileDescriptor);
 	return 0;
@@ -490,7 +490,7 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 
 	//Part 1, finish reading the current block
 	int remainingBlockFreeSpace =file_List[fileDescriptor].position % BLOCK_SIZE;
-	block_id = file_List[fileDescriptor].actualBlock;
+	block_id = file_List[fileDescriptor].currentBlock;
 
 	if (block_id < 0) {
 		printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -505,15 +505,15 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 	memmove(buffer, b + (file_List[fileDescriptor].position % BLOCK_SIZE), remainingBlockFreeSpace); //Así cogemos la posición en ese bloque
 	// Increase file position
 	file_List[fileDescriptor].position += remainingBlockFreeSpace;
-	int actualBlock= file_List[fileDescriptor].actualBlock;
-	file_List[fileDescriptor].actualBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock + 1];//Comprobar que esto funciones realmente así
+	int actualBlock= file_List[fileDescriptor].currentBlock;
+	file_List[fileDescriptor].currentBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock + 1];//Comprobar que esto funciones realmente así
 	numBytes -= remainingBlockFreeSpace;
 	//End part 1
 
 	//Part 2: iterate through whole disk blocks
 	int VueltasAlLoop = numBytes / BLOCK_SIZE; //By truncating numBytes, the number of whole blocks is obtained
 	for(int i = 0; i < VueltasAlLoop; i++){
-		block_id = file_List[fileDescriptor].actualBlock;
+		block_id = file_List[fileDescriptor].currentBlock;
 
 		if (block_id < 0) {
 			printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -528,16 +528,16 @@ int readFile(int fileDescriptor, void *buffer, int numBytes)
 		memmove(buffer+remainingBlockFreeSpace+i*BLOCK_SIZE, b + (file_List[fileDescriptor].position % BLOCK_SIZE), BLOCK_SIZE); //Esta vez la posición debería ser 0 durante el calculo, porque empezamos bloque
 		// Increase file position
 		file_List[fileDescriptor].position += BLOCK_SIZE;
-		actualBlock= file_List[fileDescriptor].actualBlock;
+		actualBlock= file_List[fileDescriptor].currentBlock;
 
-		file_List[fileDescriptor].actualBlock= inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
+		file_List[fileDescriptor].currentBlock = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].inodeTable[actualBlock+1];//Comprobar que esto funciones realmente así
 		numBytes -= BLOCK_SIZE;
 	}
 	//End part 2
 
 	//Parte 3: Leemos lo que quede
 	if(numBytes > 0){
-		block_id = file_List[fileDescriptor].actualBlock;
+		block_id = file_List[fileDescriptor].currentBlock;
 
 		if (block_id < 0) {
 			printf("Error! Block of file with id %d couldn't be read.\n", fileDescriptor);
@@ -582,7 +582,7 @@ int writeFile(int fileDescriptor, void *buffer, int numBytes)
 
     //Parte 1
 	int remainingBlockFreeSpace =file_List[fileDescriptor].position % BLOCK_SIZE;
-	block_id = file_List[fileDescriptor].actualBlock;
+	block_id = file_List[fileDescriptor].currentBlock;
 	
 	if (bread(DEVICE_IMAGE, block_id, b) < 0) {
 		printf("Error! Block %d of file with id %d couldn't be read.\n", block_id, fileDescriptor);
@@ -659,20 +659,20 @@ int lseekFile(int fileDescriptor, long offset, int whence)
 	int inodeSize = inodosBlock[fileDescriptor / iNODES_PER_BLOCK].inodeList[fileDescriptor % iNODES_PER_BLOCK].size;
 	if (whence == FS_SEEK_BEGIN) {
 		file_List[fileDescriptor].position = 0;
-		file_List[fileDescriptor].actualBlock=0;
+		file_List[fileDescriptor].currentBlock = 0;
 	}
 
 	// Change file position to its current position plus an offset	
 	else if (whence == FS_SEEK_CUR && file_List[fileDescriptor].position + offset <= inodeSize) {
 		file_List[fileDescriptor].position += offset;
-		file_List[fileDescriptor].actualBlock= file_List[fileDescriptor].position % BLOCK_SIZE;
+		file_List[fileDescriptor].currentBlock = file_List[fileDescriptor].position % BLOCK_SIZE;
 	}
 
 	// Change file position to the end
 	else if (whence == FS_SEEK_END) {
 		
 		file_List[fileDescriptor].position = inodeSize;
-		file_List[fileDescriptor].actualBlock = file_List[fileDescriptor].position % BLOCK_SIZE;
+		file_List[fileDescriptor].currentBlock = file_List[fileDescriptor].position % BLOCK_SIZE;
 	}
 
 	// If error return -1
@@ -814,7 +814,7 @@ int openFileIntegrity(char *fileName)
 	file_List[fileDescriptor].integrity = 1;	// Opened with integrity bit = 1
 	file_List[fileDescriptor].position = 0;		// Seek pointer = 0
 	file_List[fileDescriptor].opened = 1;		// Open bit = 1
-	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].currentBlock = 0;	// We are in data Block  0
 
 	printf("File %s opened with integrity.\n", fileName);
 	return fileDescriptor;
@@ -862,7 +862,7 @@ int closeFileIntegrity(int fileDescriptor)
 	// Close file
 	file_List[fileDescriptor].position = 0;		// Seek position = 0
 	file_List[fileDescriptor].opened = 0;		// Open bit = 0
-	file_List[fileDescriptor].actualBlock = 0;	// We are in data Block  0
+	file_List[fileDescriptor].currentBlock = 0;	// We are in data Block  0
 	file_List[fileDescriptor].integrity = 0;	// Opened with integrity bit = 0
 
 	printf("File with file descriptor %d closed.\n", fileDescriptor);

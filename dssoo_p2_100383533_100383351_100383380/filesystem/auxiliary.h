@@ -13,6 +13,7 @@
 #define BLOCK_SIZE 2048
 #define MAX_DISK_SIZE 614400 //600 KB
 #define MIN_DISK_SIZE 471040 //460 KB
+#define MAX_NAME_LENGTH 32 //max length for a file name
 #define MAX_iNODE_NUM 48
 #define iNODES_PER_BLOCK 24
 #define MAX_NUM_DATABLOCKS 297
