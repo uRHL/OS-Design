@@ -27,7 +27,7 @@
  * @brief 	Syncronizes local filesytem with disk
  * @return 	0 if success, -1 otherwise.
  */
-int syncronizeWithDisk(void);
+int synchronizeWithDisk(void);
 
 /*
  * @brief 	Searchs the i-node with name fname
@@ -70,3 +70,16 @@ int bmap(int inodo_id, int offset);
  * @return 	block id if success, -1 otherwise.
  */
 int allocateInWrite(int fileDescriptor);
+
+/*
+ * @brief 	Checks that all the constants are well defined, according to the Non functional requirements
+ * @return 	0 if no errors, 1 if the NTF1 is not met, 2 if NTF2 is not met, 3 if NTF3 is not met
+ , 4 if NTF4 is not met.
+ */
+int checkFSvalues();
+
+/*
+ * @brief 	Close all the files (forced) currently opened. Used when unmounting the file system
+ * @return 	0 if all the files could be closed, -1 otherwise
+ */
+int closeAllFiles();

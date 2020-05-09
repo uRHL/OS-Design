@@ -46,6 +46,7 @@ typedef struct {
     /*Max file size is 10KB. Block size is 2KB. At most a file will point to 5 different blocks*/
     unsigned int size;              /* File size in bytes */
     unsigned int numBlocks;              /* Number of data blocks used at the moment */
+    
     unsigned int pointsTo;        /*If its a link, what inode should it point to*/
     // 4*4 + 32 + (5*4) = 68 Bytes per iNode.
     //padding not needed with the inode block array
@@ -67,7 +68,7 @@ typedef struct {
 	int position;     // Seek position
 	int opened;       // 0 if closed, 1 if opened
   int currentBlock;   // Current block
-  int crc32_value;  // CRC-32 integrity value
+  uint32_t crc32_value;  // CRC-32 integrity value
   int integrity;    // 0 if opened without integrity, 1 otherwise
 } inode_x;
 
