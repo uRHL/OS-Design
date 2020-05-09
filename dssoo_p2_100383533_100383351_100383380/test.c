@@ -536,6 +536,7 @@ int main()
 		return -1;
 	}
 	///////
-
+	
+	//All test completed successfully
 	return 0;
 }

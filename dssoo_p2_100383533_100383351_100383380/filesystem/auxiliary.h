@@ -66,12 +66,6 @@ int freeBlock(int block_id);
 int bmap(int inodo_id, int offset);
 
 /*
- * @brief 	Allocate blocks when writing more than 1
- * @return 	block id if success, -1 otherwise.
- */
-int allocateInWrite(int fileDescriptor);
-
-/*
  * @brief 	Checks that all the constants are well defined, according to the Non functional requirements
  * @return 	0 if no errors, 1 if the NTF1 is not met, 2 if NTF2 is not met, 3 if NTF3 is not met
  , 4 if NTF4 is not met.
